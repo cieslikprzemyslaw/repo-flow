@@ -77,40 +77,40 @@ function Write-RepoFlowPreCommitFailureContext {
     $content.Add('## Git status')
     $content.Add('')
     $content.Add('```text')
-    $content.Add(
-        if ([string]::IsNullOrWhiteSpace($status)) {
-            'No status output.'
-        }
-        else {
-            $status
-        }
-    )
+    $statusOutput = if ([string]::IsNullOrWhiteSpace($status)) {
+        'No status output.'
+    }
+    else {
+        $status
+    }
+
+    $content.Add($statusOutput)
     $content.Add('```')
     $content.Add('')
     $content.Add('## Staged diff summary')
     $content.Add('')
     $content.Add('```text')
-    $content.Add(
-        if ([string]::IsNullOrWhiteSpace($stagedStat)) {
-            'No staged diff summary.'
-        }
-        else {
-            $stagedStat
-        }
-    )
+    $stagedStatOutput = if ([string]::IsNullOrWhiteSpace($stagedStat)) {
+        'No staged diff summary.'
+    }
+    else {
+        $stagedStat
+    }
+
+    $content.Add($stagedStatOutput)
     $content.Add('```')
     $content.Add('')
     $content.Add('## Unstaged diff summary')
     $content.Add('')
     $content.Add('```text')
-    $content.Add(
-        if ([string]::IsNullOrWhiteSpace($unstagedStat)) {
-            'No unstaged diff summary.'
-        }
-        else {
-            $unstagedStat
-        }
-    )
+    $unstagedStatOutput = if ([string]::IsNullOrWhiteSpace($unstagedStat)) {
+        'No unstaged diff summary.'
+    }
+    else {
+        $unstagedStat
+    }
+
+    $content.Add($unstagedStatOutput)
     $content.Add('```')
     $content.Add('')
     $content.Add('## Commit-hook output')

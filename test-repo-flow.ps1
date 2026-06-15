@@ -29,7 +29,25 @@ foreach ($file in $files) {
 }
 
 if ($parseErrors.Count -gt 0) {
-    $parseErrors | Format-Table -AutoSize
+    Write-Host ""
+    Write-Host "PowerShell parser errors:" -ForegroundColor Red
+
+    foreach ($parseError in $parseErrors) {
+        $filePath = $parseError.Extent.File
+        $lineNumber = $parseError.Extent.StartLineNumber
+        $columnNumber = $parseError.Extent.StartColumnNumber
+        $message = $parseError.Message
+        $code = $parseError.Extent.Text
+
+        Write-Host ""
+        Write-Host "$filePath`:$lineNumber`:$columnNumber" -ForegroundColor Yellow
+        Write-Host "  $message" -ForegroundColor Red
+
+        if (-not [string]::IsNullOrWhiteSpace($code)) {
+            Write-Host "  Code: $code" -ForegroundColor DarkGray
+        }
+    }
+
     throw "PowerShell parser found $($parseErrors.Count) error(s)."
 }
 
