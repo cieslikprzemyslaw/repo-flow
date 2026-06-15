@@ -48,7 +48,7 @@ function Get-RepoFlowMergedLocalBranches {
         }
     }
 
-    return @($merged)
+    return $merged.ToArray()
 }
 
 function Invoke-RepoFlowBranchCleanup {
@@ -84,7 +84,7 @@ function Invoke-RepoFlowBranchCleanup {
         Write-Host "[GIT] Deleting $($item.branch)..."
         Invoke-RepoFlowCommand -Command 'git' -Arguments @(
             'branch',
-            '-d',
+            '-D',
             $item.branch
         ) | Out-Null
     }
