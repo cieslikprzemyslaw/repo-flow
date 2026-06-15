@@ -322,6 +322,15 @@ function Invoke-RepoFlowIssueContinueWorkflow {
         Write-Host '[GIT] Pushing review changes...'
         Push-RepoFlowBranch -Branch $branchName
 
+        # Do not read stale checks from the previous PR head after pushing review changes.
+        $expectedHeadSha = Get-RepoFlowCommitHash
+        $pullRequest = Wait-RepoFlowPullRequestHead `
+            -PullRequestNumber ([int]$pullRequest.number) `
+            -Repository $repository `
+            -ExpectedHeadSha $expectedHeadSha `
+            -TimeoutSeconds ([int]$config.ci.timeoutSeconds) `
+            -PollSeconds ([int]$config.ci.pollSeconds)
+
         Invoke-RepoFlowCiPolicy `
             -Issue $issue `
             -PullRequest $pullRequest `
