@@ -38,6 +38,138 @@ function Get-RepoFlowAgentFinalMessage {
     return $message.Trim()
 }
 
+function New-RepoFlowAgentUsage {
+    [CmdletBinding()]
+    param()
+
+    return [pscustomobject][ordered]@{
+        InputTokens = 0L
+        CachedInputTokens = 0L
+        OutputTokens = 0L
+        ReasoningOutputTokens = 0L
+    }
+}
+
+function ConvertTo-RepoFlowSemanticVersion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Version,
+
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    try {
+        return [System.Management.Automation.SemanticVersion]::Parse($Version)
+    }
+    catch {
+        throw "Configuration value '$Path' must be a semantic version string such as 1.2.3."
+    }
+}
+
+function Get-RepoFlowSemanticVersionFromText {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Text
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return $null
+    }
+
+    $match = [regex]::Match(
+        $Text,
+        '(?<![0-9])(?<version>[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)(?![0-9A-Za-z.-])'
+    )
+
+    if (-not $match.Success) {
+        return $null
+    }
+
+    return $match.Groups['version'].Value
+}
+
+function Test-RepoFlowSemanticVersionAtLeast {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$InstalledVersion,
+
+        [Parameter(Mandatory)]
+        [string]$MinimumVersion
+    )
+
+    $installed = ConvertTo-RepoFlowSemanticVersion `
+        -Version $InstalledVersion `
+        -Path 'installed CLI version'
+    $minimum = ConvertTo-RepoFlowSemanticVersion `
+        -Version $MinimumVersion `
+        -Path '$.agent.minimumCliVersion'
+
+    return $installed -ge $minimum
+}
+
+function Get-RepoFlowAgentCliVersion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Provider,
+
+        [Parameter(Mandatory)]
+        [string]$Command
+    )
+
+    $executablePath = Resolve-RepoFlowExecutable -Command $Command
+    $output = & $executablePath --version 2>&1
+    $exitCode = $LASTEXITCODE
+    $text = ($output -join [Environment]::NewLine)
+
+    if ($exitCode -ne 0) {
+        throw "Could not determine $Provider CLI version from '$Command --version':$([Environment]::NewLine)$text"
+    }
+
+    $version = Get-RepoFlowSemanticVersionFromText -Text $text
+
+    if ([string]::IsNullOrWhiteSpace($version)) {
+        throw "Could not extract $Provider CLI semantic version from '$Command --version' output:$([Environment]::NewLine)$text"
+    }
+
+    return [pscustomobject]@{
+        ExecutablePath = $executablePath
+        Version = $version
+        Text = $text
+    }
+}
+
+function Assert-RepoFlowAgentCliVersion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Provider,
+
+        [Parameter(Mandatory)]
+        [string]$InstalledVersion,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$MinimumVersion
+    )
+
+    if ([string]::IsNullOrWhiteSpace($MinimumVersion)) {
+        return
+    }
+
+    if (-not (Test-RepoFlowSemanticVersionAtLeast -InstalledVersion $InstalledVersion -MinimumVersion $MinimumVersion)) {
+        throw (
+            "Configured $Provider CLI is too old. Installed version: $InstalledVersion. " +
+            "Required minimum version: $MinimumVersion."
+        )
+    }
+}
+
 function Get-RepoFlowCodexUsage {
     [CmdletBinding()]
     param(
@@ -45,15 +177,10 @@ function Get-RepoFlowCodexUsage {
         [string]$JsonLines
     )
 
-    $totals = [ordered]@{
-        InputTokens = 0L
-        CachedInputTokens = 0L
-        OutputTokens = 0L
-        ReasoningOutputTokens = 0L
-    }
+    $totals = New-RepoFlowAgentUsage
 
     if ([string]::IsNullOrWhiteSpace($JsonLines)) {
-        return [pscustomobject]$totals
+        return $totals
     }
 
     foreach ($line in @($JsonLines -split '\r?\n')) {
@@ -78,27 +205,273 @@ function Get-RepoFlowCodexUsage {
         $totals.ReasoningOutputTokens += [long](Get-RepoFlowProperty -Object $event.usage -Name 'reasoning_output_tokens' -Default 0)
     }
 
-    return [pscustomobject]$totals
+    return $totals
 }
 
-function Invoke-RepoFlowCodexWithHeartbeat {
+function New-RepoFlowCodexArguments {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
         [string]$RepositoryRoot,
 
         [Parameter(Mandatory)]
+        [string]$FinalMessagePath,
+
+        [Parameter(Mandatory)]
+        [string]$Model,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('minimal', 'low', 'medium', 'high', 'xhigh')]
+        [string]$ReasoningEffort
+    )
+
+    return @(
+        '-a',
+        'never',
+        '-s',
+        'workspace-write',
+        '-C',
+        $RepositoryRoot,
+        '-c',
+        ('model_reasoning_effort="{0}"' -f $ReasoningEffort),
+        '--model',
+        $Model,
+        'exec',
+        '--json',
+        '-o',
+        $FinalMessagePath,
+        '-'
+    )
+}
+
+function ConvertTo-RepoFlowClaudeEffort {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('minimal', 'low', 'medium', 'high', 'xhigh')]
+        [string]$ReasoningEffort
+    )
+
+    if ($ReasoningEffort -eq 'minimal') {
+        return 'low'
+    }
+
+    return $ReasoningEffort
+}
+
+function New-RepoFlowClaudeArguments {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Model,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('minimal', 'low', 'medium', 'high', 'xhigh')]
+        [string]$ReasoningEffort
+    )
+
+    return @(
+        '-p',
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--permission-mode',
+        'acceptEdits',
+        '--model',
+        $Model,
+        '--effort',
+        (ConvertTo-RepoFlowClaudeEffort -ReasoningEffort $ReasoningEffort),
+        '--no-session-persistence'
+    )
+}
+
+function Get-RepoFlowClaudeTextFromEvent {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        $Event
+    )
+
+    if ($null -eq $Event) {
+        return ''
+    }
+
+    $type = [string](Get-RepoFlowProperty -Object $Event -Name 'type' -Default '')
+
+    if ($type -eq 'result') {
+        foreach ($name in @('result', 'response', 'text', 'content')) {
+            $value = Get-RepoFlowProperty -Object $Event -Name $name -Default $null
+
+            if ($value -is [string] -and -not [string]::IsNullOrWhiteSpace($value)) {
+                return $value
+            }
+        }
+    }
+
+    $message = Get-RepoFlowProperty -Object $Event -Name 'message' -Default $null
+    if ($null -eq $message) {
+        return ''
+    }
+
+    $content = Get-RepoFlowProperty -Object $message -Name 'content' -Default $null
+    $parts = New-Object System.Collections.Generic.List[string]
+
+    if ($content -is [string]) {
+        $parts.Add($content)
+    }
+    elseif ($null -ne $content) {
+        foreach ($part in @($content)) {
+            if ($part -is [string]) {
+                if (-not [string]::IsNullOrWhiteSpace($part)) {
+                    $parts.Add($part)
+                }
+                continue
+            }
+
+            $partType = [string](Get-RepoFlowProperty -Object $part -Name 'type' -Default '')
+            $partText = Get-RepoFlowProperty -Object $part -Name 'text' -Default $null
+
+            if ($partType -eq 'text' -and $partText -is [string] -and -not [string]::IsNullOrWhiteSpace($partText)) {
+                $parts.Add($partText)
+            }
+        }
+    }
+
+    return ($parts -join [Environment]::NewLine).Trim()
+}
+
+function Get-RepoFlowClaudeUsageFromEvent {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        $Event
+    )
+
+    if ($null -eq $Event) {
+        return $null
+    }
+
+    $usage = Get-RepoFlowProperty -Object $Event -Name 'usage' -Default $null
+    if ($null -eq $usage) {
+        $message = Get-RepoFlowProperty -Object $Event -Name 'message' -Default $null
+        if ($null -ne $message) {
+            $usage = Get-RepoFlowProperty -Object $message -Name 'usage' -Default $null
+        }
+    }
+
+    return $usage
+}
+
+function Add-RepoFlowClaudeUsage {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        $Totals,
+
+        [AllowNull()]
+        $Usage
+    )
+
+    if ($null -eq $Usage) {
+        return
+    }
+
+    $Totals.InputTokens += [long](Get-RepoFlowProperty -Object $Usage -Name 'input_tokens' -Default 0)
+    $Totals.CachedInputTokens += [long](Get-RepoFlowProperty -Object $Usage -Name 'cache_read_input_tokens' -Default 0)
+    $Totals.CachedInputTokens += [long](Get-RepoFlowProperty -Object $Usage -Name 'cached_input_tokens' -Default 0)
+    $Totals.OutputTokens += [long](Get-RepoFlowProperty -Object $Usage -Name 'output_tokens' -Default 0)
+    $Totals.ReasoningOutputTokens += [long](Get-RepoFlowProperty -Object $Usage -Name 'reasoning_output_tokens' -Default 0)
+}
+
+function Get-RepoFlowClaudeResult {
+    [CmdletBinding()]
+    param(
+        [AllowEmptyString()]
+        [string]$JsonLines
+    )
+
+    $usage = New-RepoFlowAgentUsage
+    $finalMessage = ''
+
+    if ([string]::IsNullOrWhiteSpace($JsonLines)) {
+        return [pscustomobject]@{
+            FinalMessage = ''
+            Usage = $usage
+        }
+    }
+
+    foreach ($line in @($JsonLines -split '\r?\n')) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+            continue
+        }
+
+        try {
+            $event = $line | ConvertFrom-Json -ErrorAction Stop
+        }
+        catch {
+            continue
+        }
+
+        Add-RepoFlowClaudeUsage `
+            -Totals $usage `
+            -Usage (Get-RepoFlowClaudeUsageFromEvent -Event $event)
+
+        $text = Get-RepoFlowClaudeTextFromEvent -Event $event
+
+        if (-not [string]::IsNullOrWhiteSpace($text)) {
+            $finalMessage = $text
+        }
+    }
+
+    return [pscustomobject]@{
+        FinalMessage = $finalMessage.Trim()
+        Usage = $usage
+    }
+}
+
+function Write-RepoFlowAgentUsage {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        $Usage
+    )
+
+    if (
+        $Usage.InputTokens -gt 0 -or
+        $Usage.CachedInputTokens -gt 0 -or
+        $Usage.OutputTokens -gt 0 -or
+        $Usage.ReasoningOutputTokens -gt 0
+    ) {
+        Write-Host (
+            '[AGENT] Usage: input={0:N0}, cached={1:N0}, output={2:N0}, reasoning={3:N0}' -f
+            $Usage.InputTokens,
+            $Usage.CachedInputTokens,
+            $Usage.OutputTokens,
+            $Usage.ReasoningOutputTokens
+        )
+    }
+}
+
+function Invoke-RepoFlowAgentProcessWithHeartbeat {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Provider,
+
+        [Parameter(Mandatory)]
+        [string]$ExecutablePath,
+
+        [Parameter(Mandatory)]
+        [string[]]$Arguments,
+
+        [Parameter(Mandatory)]
+        [string]$WorkingDirectory,
+
+        [Parameter(Mandatory)]
         [string]$Prompt,
 
         [Parameter(Mandatory)]
         [string]$FinalMessagePath,
-
-        [Parameter(Mandatory)]
-        [string]$Command,
-
-        [Parameter(Mandatory)]
-        [ValidateSet('minimal', 'low', 'medium', 'high', 'xhigh')]
-        [string]$ReasoningEffort,
 
         [ValidateRange(5, 300)]
         [int]$HeartbeatSeconds = 15
@@ -112,27 +485,10 @@ function Invoke-RepoFlowCodexWithHeartbeat {
 
     try {
         Set-Content -LiteralPath $promptPath -Value $Prompt -Encoding utf8
-        $executablePath = Resolve-RepoFlowExecutable -Command $Command
-        $arguments = @(
-            '-a',
-            'never',
-            '-s',
-            'workspace-write',
-            '-C',
-            $RepositoryRoot,
-            '-c',
-            ('model_reasoning_effort="{0}"' -f $ReasoningEffort),
-            'exec',
-            '--json',
-            '-o',
-            $FinalMessagePath,
-            '-'
-        )
-
-        Write-Host "[AGENT] Reasoning effort: $ReasoningEffort"
 
         $job = Start-Job -ScriptBlock {
             param(
+                [string]$WorkingDirectory,
                 [string]$ExecutablePath,
                 [string[]]$CommandArguments,
                 [string]$InputPath,
@@ -141,12 +497,14 @@ function Invoke-RepoFlowCodexWithHeartbeat {
                 [string]$ResultPath
             )
 
+            Set-Location -LiteralPath $WorkingDirectory
             $inputContent = Get-Content -LiteralPath $InputPath -Raw
             $inputContent | & $ExecutablePath @CommandArguments 1> $OutputPath 2> $ErrorPath
             Set-Content -LiteralPath $ResultPath -Value $LASTEXITCODE -Encoding ascii
         } -ArgumentList @(
+            $WorkingDirectory,
             $executablePath,
-            $arguments,
+            $Arguments,
             $promptPath,
             $stdoutPath,
             $stderrPath,
@@ -177,7 +535,7 @@ function Invoke-RepoFlowCodexWithHeartbeat {
                 'analysing repository'
             }
 
-            Write-Host ("[AGENT] {0}m {1}s | {2} | {3} changed file(s)" -f $minutes, $seconds, $activity, $changedFiles)
+            Write-Host ("[AGENT] {0} | {1}m {2}s | {3} | {4} changed file(s)" -f $Provider, $minutes, $seconds, $activity, $changedFiles)
             $lastOutputLength = $outputLength
         }
 
@@ -209,37 +567,12 @@ function Invoke-RepoFlowCodexWithHeartbeat {
             }
         }
 
-        $usage = Get-RepoFlowCodexUsage -JsonLines $stdout
         $duration = (Get-Date) - $startedAt
-
-        if (
-            $usage.InputTokens -gt 0 -or
-            $usage.CachedInputTokens -gt 0 -or
-            $usage.OutputTokens -gt 0 -or
-            $usage.ReasoningOutputTokens -gt 0
-        ) {
-            Write-Host (
-                '[AGENT] Usage: input={0:N0}, cached={1:N0}, output={2:N0}, reasoning={3:N0}' -f
-                $usage.InputTokens,
-                $usage.CachedInputTokens,
-                $usage.OutputTokens,
-                $usage.ReasoningOutputTokens
-            )
-        }
-
-        Write-Host (
-            '[AGENT] Duration: {0}m {1}s' -f
-            [Math]::Floor($duration.TotalMinutes),
-            $duration.Seconds
-        )
-
-        $combined = @($stdout, $stderr) |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 
         return [pscustomobject]@{
             ExitCode = $exitCode
-            Text = ($combined -join [Environment]::NewLine)
-            Usage = $usage
+            StandardOutput = $stdout
+            StandardError = $stderr
             DurationSeconds = [int][Math]::Round($duration.TotalSeconds)
         }
     }
@@ -250,6 +583,133 @@ function Invoke-RepoFlowCodexWithHeartbeat {
         }
 
         Remove-Item -LiteralPath $promptPath, $stdoutPath, $stderrPath, $exitCodePath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Invoke-RepoFlowCodexWithHeartbeat {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$RepositoryRoot,
+
+        [Parameter(Mandatory)]
+        [string]$Prompt,
+
+        [Parameter(Mandatory)]
+        [string]$FinalMessagePath,
+
+        [Parameter(Mandatory)]
+        [string]$ExecutablePath,
+
+        [Parameter(Mandatory)]
+        [string]$Model,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('minimal', 'low', 'medium', 'high', 'xhigh')]
+        [string]$ReasoningEffort,
+
+        [ValidateRange(5, 300)]
+        [int]$HeartbeatSeconds = 15
+    )
+
+    $arguments = New-RepoFlowCodexArguments `
+        -RepositoryRoot $RepositoryRoot `
+        -FinalMessagePath $FinalMessagePath `
+        -Model $Model `
+        -ReasoningEffort $ReasoningEffort
+
+    $run = Invoke-RepoFlowAgentProcessWithHeartbeat `
+        -Provider 'codex' `
+        -ExecutablePath $ExecutablePath `
+        -Arguments $arguments `
+        -WorkingDirectory $RepositoryRoot `
+        -Prompt $Prompt `
+        -FinalMessagePath $FinalMessagePath `
+        -HeartbeatSeconds $HeartbeatSeconds
+
+    $usage = Get-RepoFlowCodexUsage -JsonLines $run.StandardOutput
+    Write-RepoFlowAgentUsage -Usage $usage
+
+    $duration = [timespan]::FromSeconds($run.DurationSeconds)
+    Write-Host (
+        '[AGENT] Duration: {0}m {1}s' -f
+        [Math]::Floor($duration.TotalMinutes),
+        $duration.Seconds
+    )
+
+    $combined = @($run.StandardOutput, $run.StandardError) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    return [pscustomobject]@{
+        ExitCode = $run.ExitCode
+        Text = ($combined -join [Environment]::NewLine)
+        Usage = $usage
+        DurationSeconds = $run.DurationSeconds
+    }
+}
+
+function Invoke-RepoFlowClaudeWithHeartbeat {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$RepositoryRoot,
+
+        [Parameter(Mandatory)]
+        [string]$Prompt,
+
+        [Parameter(Mandatory)]
+        [string]$FinalMessagePath,
+
+        [Parameter(Mandatory)]
+        [string]$ExecutablePath,
+
+        [Parameter(Mandatory)]
+        [string]$Model,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('minimal', 'low', 'medium', 'high', 'xhigh')]
+        [string]$ReasoningEffort,
+
+        [ValidateRange(5, 300)]
+        [int]$HeartbeatSeconds = 15
+    )
+
+    $arguments = New-RepoFlowClaudeArguments `
+        -Model $Model `
+        -ReasoningEffort $ReasoningEffort
+
+    $run = Invoke-RepoFlowAgentProcessWithHeartbeat `
+        -Provider 'claude' `
+        -ExecutablePath $ExecutablePath `
+        -Arguments $arguments `
+        -WorkingDirectory $RepositoryRoot `
+        -Prompt $Prompt `
+        -FinalMessagePath $FinalMessagePath `
+        -HeartbeatSeconds $HeartbeatSeconds
+
+    $result = Get-RepoFlowClaudeResult -JsonLines $run.StandardOutput
+
+    if (-not [string]::IsNullOrWhiteSpace($result.FinalMessage)) {
+        Set-Content -LiteralPath $FinalMessagePath -Value $result.FinalMessage -Encoding utf8
+    }
+
+    Write-RepoFlowAgentUsage -Usage $result.Usage
+
+    $duration = [timespan]::FromSeconds($run.DurationSeconds)
+    Write-Host (
+        '[AGENT] Duration: {0}m {1}s' -f
+        [Math]::Floor($duration.TotalMinutes),
+        $duration.Seconds
+    )
+
+    $combined = @($run.StandardOutput, $run.StandardError) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    return [pscustomobject]@{
+        ExitCode = $run.ExitCode
+        Text = ($combined -join [Environment]::NewLine)
+        Usage = $result.Usage
+        DurationSeconds = $run.DurationSeconds
     }
 }
 
@@ -279,18 +739,55 @@ function Invoke-RepoFlowAgent {
         $ReasoningEffort
     }
 
-    switch ($Config.agent.provider) {
+    $provider = [string]$Config.agent.provider
+    $command = [string]$Config.agent.command
+    $model = [string]$Config.agent.model
+
+    if ($provider -notin @('codex', 'claude')) {
+        throw "Unsupported agent provider: $provider"
+    }
+
+    $minimumCliVersion = Get-RepoFlowProperty `
+        -Object $Config.agent `
+        -Name 'minimumCliVersion' `
+        -Default $null
+    $versionInfo = Get-RepoFlowAgentCliVersion `
+        -Provider $provider `
+        -Command $command
+
+    Assert-RepoFlowAgentCliVersion `
+        -Provider $provider `
+        -InstalledVersion $versionInfo.Version `
+        -MinimumVersion $minimumCliVersion
+
+    Write-Host "[AGENT] Provider: $provider"
+    Write-Host "[AGENT] Model: $model"
+    Write-Host "[AGENT] CLI version: $($versionInfo.Version)"
+    Write-Host "[AGENT] Reasoning effort: $effectiveReasoningEffort"
+
+    switch ($provider) {
         'codex' {
             return Invoke-RepoFlowCodexWithHeartbeat `
                 -RepositoryRoot $RepositoryRoot `
                 -Prompt $Prompt `
                 -FinalMessagePath $FinalMessagePath `
-                -Command ([string]$Config.agent.command) `
+                -ExecutablePath ([string]$versionInfo.ExecutablePath) `
+                -Model $model `
+                -ReasoningEffort $effectiveReasoningEffort `
+                -HeartbeatSeconds ([int]$Config.agent.heartbeatSeconds)
+        }
+        'claude' {
+            return Invoke-RepoFlowClaudeWithHeartbeat `
+                -RepositoryRoot $RepositoryRoot `
+                -Prompt $Prompt `
+                -FinalMessagePath $FinalMessagePath `
+                -ExecutablePath ([string]$versionInfo.ExecutablePath) `
+                -Model $model `
                 -ReasoningEffort $effectiveReasoningEffort `
                 -HeartbeatSeconds ([int]$Config.agent.heartbeatSeconds)
         }
         default {
-            throw "Unsupported agent provider: $($Config.agent.provider)"
+            throw "Unsupported agent provider: $provider"
         }
     }
 }

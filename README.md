@@ -56,7 +56,7 @@ RepoFlow is intentionally conservative:
 - Windows, Linux, or macOS with PowerShell 7.2+
 - Git
 - GitHub CLI (`gh`), authenticated
-- Codex CLI for agent-backed workflows
+- Codex CLI or Claude Code for agent-backed workflows
 - Pester 5+ for tests
 
 Check the tools:
@@ -67,6 +67,8 @@ git --version
 gh --version
 gh auth status
 codex --version
+# or
+claude --version
 ```
 
 Install Pester for the current user when needed:
@@ -171,6 +173,8 @@ A minimal workflow configuration looks like this:
   "agent": {
     "provider": "codex",
     "command": "codex",
+    "model": "gpt-5.5",
+    "minimumCliVersion": null,
     "heartbeatSeconds": 15,
     "reasoningEffort": "medium",
     "ciFixReasoningEffort": "low",
@@ -208,6 +212,34 @@ A minimal workflow configuration looks like this:
 ```
 
 Do not store tokens, passwords, API keys, or executable PowerShell in the configuration.
+
+### Agent provider
+
+RepoFlow supports Codex and Claude Code through the same workflow commands. The provider selects the adapter, the command selects the executable name or path, and the model is always passed explicitly to the CLI with `--model`.
+
+Use Codex:
+
+```json
+"agent": {
+  "provider": "codex",
+  "command": "codex",
+  "model": "gpt-5.5",
+  "minimumCliVersion": null
+}
+```
+
+Use Claude Code:
+
+```json
+"agent": {
+  "provider": "claude",
+  "command": "claude",
+  "model": "claude-sonnet-4-6",
+  "minimumCliVersion": null
+}
+```
+
+`model` is the agent model name used for a run. `minimumCliVersion` is an optional lower bound for the installed CLI executable, checked through `command --version` before the agent starts; set it to `null` to skip the lower-bound check.
 
 ## Target repository contract
 
@@ -456,7 +488,6 @@ The implementation should continue to treat all external text as data, pass proc
 
 ## Current limitations
 
-- Codex is the only agent provider in the current release.
 - PR feedback supports top-level comments, not inline review threads.
 - RepoFlow is designed around GitHub and GitHub CLI.
 - Configuration currently targets one repository per config file; use `-ConfigPath` for additional repositories.
@@ -464,7 +495,7 @@ The implementation should continue to treat all external text as data, pass proc
 
 ## Roadmap
 
-- stable provider interface for additional coding agents;
+- retained execution reports for agent runs;
 - richer run diagnostics and retained execution reports;
 - improved resume/recovery after interrupted local workflows;
 - packaging and installation as a reusable PowerShell module;

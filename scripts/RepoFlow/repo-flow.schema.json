@@ -113,23 +113,40 @@
       "required": [
         "provider",
         "command",
+        "model",
+        "minimumCliVersion",
         "heartbeatSeconds",
         "reasoningEffort",
         "ciFixReasoningEffort",
+        "preCommitFixReasoningEffort",
         "runProjectChecks"
       ],
       "properties": {
         "provider": {
           "type": "string",
           "enum": [
-            "codex"
+            "codex",
+            "claude"
           ],
-          "description": "Coding-agent provider. RepoFlow v0.1 supports Codex."
+          "description": "Coding-agent provider. Supported values are codex and claude."
         },
         "command": {
           "type": "string",
           "minLength": 1,
           "description": "Executable name or path used to start the coding agent."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Agent model passed explicitly to the selected CLI with --model. This is independent of the CLI executable version."
+        },
+        "minimumCliVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+          "description": "Optional minimum semantic version for the configured agent CLI. Use null to allow any installed version."
         },
         "heartbeatSeconds": {
           "type": "integer",

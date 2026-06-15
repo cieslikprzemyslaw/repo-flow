@@ -167,6 +167,32 @@ function Assert-RepoFlowString {
     }
 }
 
+function Assert-RepoFlowNullableSemanticVersionString {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        $Value,
+
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    if ($null -eq $Value) {
+        return
+    }
+
+    Assert-RepoFlowString -Value $Value -Path $Path
+
+    if ([string]$Value -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$') {
+        throw "Configuration value '$Path' must be a semantic version string such as 1.2.3."
+    }
+
+    ConvertTo-RepoFlowSemanticVersion `
+        -Version ([string]$Value) `
+        -Path $Path |
+        Out-Null
+}
+
 function Assert-RepoFlowIntegerRange {
     [CmdletBinding()]
     param(
@@ -315,6 +341,8 @@ function Read-RepoFlowConfiguration {
     Assert-RepoFlowAllowedProperties -Object $agent -Path '$.agent' -Allowed @(
         'provider',
         'command',
+        'model',
+        'minimumCliVersion',
         'heartbeatSeconds',
         'reasoningEffort',
         'ciFixReasoningEffort',
@@ -359,6 +387,8 @@ function Read-RepoFlowConfiguration {
 
     $agentProvider = Get-RepoFlowProperty -Object $agent -Name 'provider' -Default 'codex'
     $agentCommand = Get-RepoFlowProperty -Object $agent -Name 'command' -Default 'codex'
+    $agentModel = Get-RepoFlowProperty -Object $agent -Name 'model' -Default 'gpt-5.5'
+    $minimumCliVersion = Get-RepoFlowProperty -Object $agent -Name 'minimumCliVersion' -Default $null
     $heartbeatSeconds = Get-RepoFlowProperty -Object $agent -Name 'heartbeatSeconds' -Default 15
     $reasoningEffort = Get-RepoFlowProperty -Object $agent -Name 'reasoningEffort' -Default 'medium'
     $ciFixReasoningEffort = Get-RepoFlowProperty -Object $agent -Name 'ciFixReasoningEffort' -Default 'low'
@@ -401,6 +431,8 @@ function Read-RepoFlowConfiguration {
 
     Assert-RepoFlowString -Value $agentProvider -Path '$.agent.provider'
     Assert-RepoFlowString -Value $agentCommand -Path '$.agent.command'
+    Assert-RepoFlowString -Value $agentModel -Path '$.agent.model'
+    Assert-RepoFlowNullableSemanticVersionString -Value $minimumCliVersion -Path '$.agent.minimumCliVersion'
     Assert-RepoFlowIntegerRange -Value $heartbeatSeconds -Minimum 5 -Maximum 300 -Path '$.agent.heartbeatSeconds'
     Assert-RepoFlowString -Value $reasoningEffort -Path '$.agent.reasoningEffort'
     Assert-RepoFlowString -Value $ciFixReasoningEffort -Path '$.agent.ciFixReasoningEffort'
@@ -450,6 +482,13 @@ function Read-RepoFlowConfiguration {
         agent = [pscustomobject]@{
             provider = [string]$agentProvider
             command = [string]$agentCommand
+            model = [string]$agentModel
+            minimumCliVersion = if ($null -eq $minimumCliVersion) {
+                $null
+            }
+            else {
+                [string]$minimumCliVersion
+            }
             heartbeatSeconds = [int]$heartbeatSeconds
             reasoningEffort = [string]$reasoningEffort
             ciFixReasoningEffort = [string]$ciFixReasoningEffort
@@ -516,11 +555,13 @@ function Assert-RepoFlowConfiguration {
     Assert-RepoFlowBoolean -Value $Config.git.signOffCommits -Path '$.git.signOffCommits'
     Assert-RepoFlowIntegerRange -Value $Config.git.preCommitFixAttempts -Minimum 0 -Maximum 3 -Path '$.git.preCommitFixAttempts'
 
-    if ($Config.agent.provider -ne 'codex') {
-        throw "Configuration value '$.agent.provider' currently supports only 'codex'."
+    if ($Config.agent.provider -notin @('codex', 'claude')) {
+        throw "Configuration value '$.agent.provider' must be codex or claude."
     }
 
     Assert-RepoFlowString -Value $Config.agent.command -Path '$.agent.command'
+    Assert-RepoFlowString -Value $Config.agent.model -Path '$.agent.model'
+    Assert-RepoFlowNullableSemanticVersionString -Value $Config.agent.minimumCliVersion -Path '$.agent.minimumCliVersion'
     Assert-RepoFlowIntegerRange -Value $Config.agent.heartbeatSeconds -Minimum 5 -Maximum 300 -Path '$.agent.heartbeatSeconds'
 
     foreach ($name in @('reasoningEffort', 'ciFixReasoningEffort', 'preCommitFixReasoningEffort')) {

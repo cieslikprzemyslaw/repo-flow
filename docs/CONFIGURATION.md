@@ -33,9 +33,12 @@ Documentation is kept in this file, while property descriptions are also stored 
   "agent": {
     "provider": "codex",
     "command": "codex",
+    "model": "gpt-5.5",
+    "minimumCliVersion": null,
     "heartbeatSeconds": 15,
     "reasoningEffort": "medium",
     "ciFixReasoningEffort": "low",
+    "preCommitFixReasoningEffort": "low",
     "runProjectChecks": false
   },
   "pullRequest": {
@@ -159,7 +162,7 @@ Enable this only when the project intentionally uses Developer Certificate of Or
 "provider": "codex"
 ```
 
-Selects the coding-agent adapter. RepoFlow v0.1 supports only `codex`, but the configuration leaves room for additional providers later.
+Selects the coding-agent adapter. Supported values are `codex` and `claude`.
 
 ### `command`
 
@@ -168,6 +171,22 @@ Selects the coding-agent adapter. RepoFlow v0.1 supports only `codex`, but the c
 ```
 
 The executable name or path used to start the configured agent. Use a full path only when the command is not available through `PATH`.
+
+### `model`
+
+```json
+"model": "gpt-5.5"
+```
+
+The model passed explicitly to the selected CLI with `--model`. For Claude Code, use the corresponding Claude model name, such as `claude-sonnet-4-6`.
+
+### `minimumCliVersion`
+
+```json
+"minimumCliVersion": null
+```
+
+Optional minimum semantic version for the configured CLI executable. RepoFlow checks this with `command --version` before starting the agent. This is separate from `model`: `model` chooses the remote model for a run, while `minimumCliVersion` gates the installed local CLI version.
 
 ### `heartbeatSeconds`
 
@@ -185,7 +204,7 @@ This affects only status output, not the agent timeout.
 "reasoningEffort": "medium"
 ```
 
-Controls Codex reasoning effort for initial issue implementation and PR-comment continuation. Supported values are `minimal`, `low`, `medium`, `high`, and `xhigh` when the selected Codex model supports them.
+Controls agent reasoning effort for initial issue implementation and PR-comment continuation. Supported RepoFlow values are `minimal`, `low`, `medium`, `high`, and `xhigh`. Claude Code receives `low` when RepoFlow is configured with `minimal`; the other values are passed through unchanged.
 
 `medium` is the recommended default for normal repository tasks: it keeps the run bounded without forcing every task into the most expensive reasoning mode.
 
@@ -197,7 +216,7 @@ Controls Codex reasoning effort for initial issue implementation and PR-comment 
 
 Controls reasoning effort for focused automatic CI fixes. CI fixes already receive failed logs and the current branch diff, so `low` is the recommended default. Increase it only when focused fixes repeatedly fail to diagnose a complex error.
 
-RepoFlow prints Codex token usage after each run when the CLI reports it, allowing initial implementation and CI-fix usage to be compared separately.
+RepoFlow prints agent token usage after each run when the CLI reports it, allowing initial implementation and CI-fix usage to be compared separately.
 
 ### `runProjectChecks`
 
