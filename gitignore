@@ -1,0 +1,22 @@
+# Local target-repository configuration
+.repo-flow.json
+.repo-flow.local.json
+
+# RepoFlow runtime diagnostics and temporary data
+.repo-flow-runs/
+.repo-flow-cache/
+.repo-flow-temp/
+
+# Pester and test output
+TestResults/
+test-results/
+*.trx
+
+# PowerShell temporary/output files
+*.tmp
+*.log
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/*.log

@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/repo-flow.schema.json",
+  "title": "RepoFlow configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "repository",
+    "issues",
+    "git",
+    "agent",
+    "pullRequest",
+    "messages",
+    "ci",
+    "reviewFeedback"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional editor schema reference used for validation and autocomplete."
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slug",
+        "expectedOrigins",
+        "baseBranch"
+      ],
+      "properties": {
+        "localPath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Local path to the Git repository managed by RepoFlow. Relative paths are resolved from the directory containing .repo-flow.json."
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[^/\\s]+/[^/\\s]+$",
+          "description": "GitHub repository in owner/repository format."
+        },
+        "expectedOrigins": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Accepted origin remote URLs. RepoFlow stops when the current repository origin is not listed."
+        },
+        "baseBranch": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Branch used as the source for issue branches and expected pull-request target."
+        }
+      },
+      "description": "GitHub repository identity and base-branch settings."
+    },
+    "issues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifestPath"
+      ],
+      "properties": {
+        "manifestPath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path to the issue manifest used by issue sync."
+        }
+      },
+      "description": "Issue-manifest settings."
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requireCleanWorkingTree",
+        "deleteMergedLocalBranches",
+        "pruneRemoteReferences",
+        "signOffCommits"
+      ],
+      "properties": {
+        "requireCleanWorkingTree": {
+          "type": "boolean",
+          "description": "Stop before branch or file mutations when the working tree is not clean."
+        },
+        "deleteMergedLocalBranches": {
+          "type": "boolean",
+          "description": "Delete a local branch only after its pull request is confirmed merged into the configured base branch."
+        },
+        "pruneRemoteReferences": {
+          "type": "boolean",
+          "description": "Prune stale remote-tracking branch references during cleanup."
+        },
+        "signOffCommits": {
+          "type": "boolean",
+          "description": "Use git commit -s and append a Signed-off-by trailer. This is DCO sign-off, not cryptographic commit signing."
+        },
+        "preCommitFixAttempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Number of focused automatic agent attempts after a git commit is blocked by a pre-commit hook."
+        }
+      },
+      "description": "Git safety and cleanup settings."
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "command",
+        "heartbeatSeconds",
+        "reasoningEffort",
+        "ciFixReasoningEffort",
+        "runProjectChecks"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": [
+            "codex"
+          ],
+          "description": "Coding-agent provider. RepoFlow v0.1 supports Codex."
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Executable name or path used to start the coding agent."
+        },
+        "heartbeatSeconds": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 300,
+          "description": "Interval in seconds between agent progress messages."
+        },
+        "runProjectChecks": {
+          "type": "boolean",
+          "description": "Whether the agent is instructed to run project checks defined by AGENTS.md."
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "enum": [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "description": "Reasoning effort used for initial issue implementation and PR review-feedback runs."
+        },
+        "ciFixReasoningEffort": {
+          "type": "string",
+          "enum": [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "description": "Reasoning effort used for focused automatic CI-fix runs. A lower value reduces usage for narrow fixes."
+        },
+        "preCommitFixReasoningEffort": {
+          "type": "string",
+          "enum": [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "description": "Reasoning effort used for focused fixes after a pre-commit hook blocks git commit."
+        }
+      },
+      "description": "Coding-agent adapter and execution settings."
+    },
+    "pullRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "createDraft",
+        "templatePath"
+      ],
+      "properties": {
+        "createDraft": {
+          "type": "boolean",
+          "description": "Create new pull requests as drafts when true."
+        },
+        "templatePath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path to the pull-request template."
+        },
+        "mergeMethod": {
+          "type": "string",
+          "enum": [
+            "squash",
+            "merge",
+            "rebase"
+          ],
+          "description": "Merge method used by pr merge and pr accept."
+        },
+        "deleteBranchOnMerge": {
+          "type": "boolean",
+          "description": "Delete the remote head branch after GitHub confirms a successful merge."
+        }
+      },
+      "description": "Pull-request creation settings."
+    },
+    "messages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "initialCommit",
+        "reviewCommit",
+        "ciFixCommit",
+        "pullRequestTitle"
+      ],
+      "properties": {
+        "initialCommit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Commit message template for the initial issue implementation."
+        },
+        "reviewCommit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Commit message template for changes based on PR review feedback."
+        },
+        "ciFixCommit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Commit message template for focused automatic CI fixes."
+        },
+        "pullRequestTitle": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Title template for a newly created pull request."
+        }
+      },
+      "description": "Templates for generated commit messages and pull-request titles."
+    },
+    "ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "pollSeconds",
+        "timeoutSeconds",
+        "autoFixAttempts"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "skip",
+            "observe",
+            "require-passing"
+          ],
+          "description": "CI policy: skip, observe, or require-passing."
+        },
+        "pollSeconds": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 300,
+          "description": "Seconds between GitHub check-status polls."
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 7200,
+          "description": "Maximum seconds to wait for one CI observation cycle."
+        },
+        "autoFixAttempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Maximum focused automatic CI-fix attempts. Must be zero unless mode is require-passing."
+        }
+      },
+      "description": "Pull-request check observation and automatic-fix policy."
+    },
+    "reviewFeedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "confirmBeforeRun",
+        "trustedAssociations"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Allow issue continue with -LastPrComment or -PrCommentId."
+        },
+        "confirmBeforeRun": {
+          "type": "boolean",
+          "description": "Ask for confirmation after displaying the selected PR comment and before mutations."
+        },
+        "trustedAssociations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "OWNER",
+              "MEMBER",
+              "COLLABORATOR"
+            ]
+          },
+          "description": "GitHub author associations allowed to supply review feedback."
+        }
+      },
+      "description": "Settings for continuing an open PR from a selected top-level PR comment."
+    }
+  }
+}

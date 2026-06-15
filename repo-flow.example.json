@@ -1,0 +1,58 @@
+{
+  "$schema": "./scripts/RepoFlow/repo-flow.schema.json",
+  "repository": {
+    "localPath": "C:\\Projects\\repo-flow",
+    "slug": "owner/repository",
+    "expectedOrigins": [
+      "https://github.com/owner/repository.git",
+      "git@github.com:owner/repository.git"
+    ],
+    "baseBranch": "main"
+  },
+  "issues": {
+    "manifestPath": "./issues-manifest.json"
+  },
+  "git": {
+    "requireCleanWorkingTree": true,
+    "deleteMergedLocalBranches": true,
+    "pruneRemoteReferences": true,
+    "signOffCommits": false,
+    "preCommitFixAttempts": 1
+  },
+  "agent": {
+    "provider": "codex",
+    "command": "codex",
+    "heartbeatSeconds": 15,
+    "reasoningEffort": "medium",
+    "ciFixReasoningEffort": "low",
+    "preCommitFixReasoningEffort": "low",
+    "runProjectChecks": false
+  },
+  "pullRequest": {
+    "createDraft": true,
+    "templatePath": "./.github/pull_request_template.md",
+    "mergeMethod": "squash",
+    "deleteBranchOnMerge": true
+  },
+  "messages": {
+    "initialCommit": "{verb} #{issueNumber}: {issueTitle}",
+    "reviewCommit": "Fix review feedback for #{issueNumber}",
+    "ciFixCommit": "Fix CI for #{issueNumber}",
+    "pullRequestTitle": "{verb} #{issueNumber}: {issueTitle}"
+  },
+  "ci": {
+    "mode": "require-passing",
+    "pollSeconds": 30,
+    "timeoutSeconds": 1800,
+    "autoFixAttempts": 1
+  },
+  "reviewFeedback": {
+    "enabled": true,
+    "confirmBeforeRun": true,
+    "trustedAssociations": [
+      "OWNER",
+      "MEMBER",
+      "COLLABORATOR"
+    ]
+  }
+}
