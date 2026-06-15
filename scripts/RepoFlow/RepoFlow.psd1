@@ -1,6 +1,6 @@
 @{
     RootModule = 'RepoFlow.psm1'
-    ModuleVersion = '0.1.7'
+    ModuleVersion = '0.2.0'
     GUID = 'e8cb12f5-f8fe-4ed7-bf08-c47939fd652d'
     Author = 'Przemyslaw Cieslik'
     CompanyName = 'Community'
@@ -13,8 +13,8 @@
     AliasesToExport = @()
     PrivateData = @{
         PSData = @{
-            Tags = @('git', 'github', 'automation', 'codex', 'workflow')
-            ProjectUri = 'https://github.com/cieslikprzemyslaw/application-security-reports'
+            Tags = @('git', 'github', 'automation', 'codex', 'claude', 'workflow')
+            ProjectUri = 'https://github.com/cieslikprzemyslaw/repo-flow'
         }
     }
 }

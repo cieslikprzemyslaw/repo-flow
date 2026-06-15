@@ -10,6 +10,7 @@ $privateFiles = @(
     'Git.ps1',
     'Issues.ps1',
     'Branches.ps1',
+    'Diagnostics.ps1',
     'Agent.ps1',
     'Prompts.ps1',
     'PreCommit.ps1',

@@ -392,11 +392,17 @@ function Get-RepoFlowClaudeResult {
 
     $usage = New-RepoFlowAgentUsage
     $finalMessage = ''
+    $isError = $false
+    $errorCode = ''
+    $errorMessage = ''
 
     if ([string]::IsNullOrWhiteSpace($JsonLines)) {
         return [pscustomobject]@{
             FinalMessage = ''
             Usage = $usage
+            IsError = $false
+            ErrorCode = ''
+            ErrorMessage = ''
         }
     }
 
@@ -421,12 +427,115 @@ function Get-RepoFlowClaudeResult {
         if (-not [string]::IsNullOrWhiteSpace($text)) {
             $finalMessage = $text
         }
+
+        $eventIsError = Get-RepoFlowProperty `
+            -Object $event `
+            -Name 'is_error' `
+            -Default $false
+        $eventError = [string](Get-RepoFlowProperty `
+            -Object $event `
+            -Name 'error' `
+            -Default '')
+        $eventMessage = Get-RepoFlowProperty `
+            -Object $event `
+            -Name 'message' `
+            -Default $null
+        $messageError = [string](Get-RepoFlowProperty `
+            -Object $eventMessage `
+            -Name 'error' `
+            -Default '')
+
+        if ([string]::IsNullOrWhiteSpace($eventError)) {
+            $eventError = $messageError
+        }
+
+        if ($eventIsError -eq $true -or -not [string]::IsNullOrWhiteSpace($eventError)) {
+            $isError = $true
+
+            if (-not [string]::IsNullOrWhiteSpace($eventError)) {
+                $errorCode = $eventError
+            }
+
+            $apiStatus = Get-RepoFlowProperty `
+                -Object $event `
+                -Name 'api_error_status' `
+                -Default $null
+
+            if ([string]::IsNullOrWhiteSpace($errorCode) -and $null -ne $apiStatus) {
+                $errorCode = "http_$apiStatus"
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($text)) {
+                $errorMessage = $text
+            }
+        }
+    }
+
+    if ($isError -and [string]::IsNullOrWhiteSpace($errorMessage)) {
+        $errorMessage = 'Claude reported an unsuccessful result.'
     }
 
     return [pscustomobject]@{
         FinalMessage = $finalMessage.Trim()
         Usage = $usage
+        IsError = $isError
+        ErrorCode = $errorCode
+        ErrorMessage = $errorMessage.Trim()
     }
+}
+
+function Get-RepoFlowAgentFailureText {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Provider,
+
+        [Parameter(Mandatory)]
+        [string]$Model,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$StandardOutput,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$StandardError,
+
+        [AllowNull()]
+        $ParsedResult
+    )
+
+    $providerName = if ($Provider -eq 'claude') { 'Claude' } else { 'Codex' }
+
+    if ($null -ne $ParsedResult -and $ParsedResult.IsError -eq $true) {
+        $code = if ([string]::IsNullOrWhiteSpace([string]$ParsedResult.ErrorCode)) {
+            'agent_error'
+        }
+        else {
+            [string]$ParsedResult.ErrorCode
+        }
+        $message = if ([string]::IsNullOrWhiteSpace([string]$ParsedResult.ErrorMessage)) {
+            'The agent reported an unsuccessful result.'
+        }
+        else {
+            [string]$ParsedResult.ErrorMessage
+        }
+
+        return "$providerName agent failed for model '$Model' [$code]: $message"
+    }
+
+    $diagnostic = @($StandardError, $StandardOutput) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    $diagnosticText = Get-RepoFlowBoundedText `
+        -Text ($diagnostic -join [Environment]::NewLine) `
+        -MaximumCharacters 12000 `
+        -HeadCharacters 2000
+
+    if ([string]::IsNullOrWhiteSpace($diagnosticText)) {
+        return "$providerName agent failed for model '$Model' without diagnostic output."
+    }
+
+    return "$providerName agent failed for model '$Model':$([Environment]::NewLine)$diagnosticText"
 }
 
 function Write-RepoFlowAgentUsage {
@@ -639,12 +748,23 @@ function Invoke-RepoFlowCodexWithHeartbeat {
 
     $combined = @($run.StandardOutput, $run.StandardError) |
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    $text = if ($run.ExitCode -ne 0) {
+        Get-RepoFlowAgentFailureText `
+            -Provider 'codex' `
+            -Model $Model `
+            -StandardOutput $run.StandardOutput `
+            -StandardError $run.StandardError
+    }
+    else {
+        $combined -join [Environment]::NewLine
+    }
 
     return [pscustomobject]@{
         ExitCode = $run.ExitCode
-        Text = ($combined -join [Environment]::NewLine)
+        Text = $text
         Usage = $usage
         DurationSeconds = $run.DurationSeconds
+        ErrorCode = ''
     }
 }
 
@@ -688,8 +808,12 @@ function Invoke-RepoFlowClaudeWithHeartbeat {
         -HeartbeatSeconds $HeartbeatSeconds
 
     $result = Get-RepoFlowClaudeResult -JsonLines $run.StandardOutput
+    $effectiveExitCode = if ($run.ExitCode -ne 0 -or $result.IsError) { 1 } else { 0 }
 
-    if (-not [string]::IsNullOrWhiteSpace($result.FinalMessage)) {
+    if (
+        $effectiveExitCode -eq 0 -and
+        -not [string]::IsNullOrWhiteSpace($result.FinalMessage)
+    ) {
         Set-Content -LiteralPath $FinalMessagePath -Value $result.FinalMessage -Encoding utf8
     }
 
@@ -704,12 +828,24 @@ function Invoke-RepoFlowClaudeWithHeartbeat {
 
     $combined = @($run.StandardOutput, $run.StandardError) |
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    $text = if ($effectiveExitCode -ne 0) {
+        Get-RepoFlowAgentFailureText `
+            -Provider 'claude' `
+            -Model $Model `
+            -StandardOutput $run.StandardOutput `
+            -StandardError $run.StandardError `
+            -ParsedResult $result
+    }
+    else {
+        $combined -join [Environment]::NewLine
+    }
 
     return [pscustomobject]@{
-        ExitCode = $run.ExitCode
-        Text = ($combined -join [Environment]::NewLine)
+        ExitCode = $effectiveExitCode
+        Text = $text
         Usage = $result.Usage
         DurationSeconds = $run.DurationSeconds
+        ErrorCode = [string]$result.ErrorCode
     }
 }
 

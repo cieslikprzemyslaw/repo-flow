@@ -83,7 +83,7 @@ Install-Module Pester -MinimumVersion 5.0 -Scope CurrentUser -Force
 repo-flow/
 ├── repo-flow.ps1
 ├── test-repo-flow.ps1
-├── .repo-flow.example.json
+├── repo-flow.example.json
 ├── .gitignore
 ├── README.md
 ├── docs/
@@ -111,7 +111,7 @@ Set-Location .\repo-flow
 Create a local configuration:
 
 ```powershell
-Copy-Item .\.repo-flow.example.json .\.repo-flow.json
+Copy-Item .\repo-flow.example.json .\.repo-flow.json
 ```
 
 Edit `.repo-flow.json` and set at least:
@@ -252,6 +252,18 @@ issues-manifest.json              # only when issue sync is used
 ```
 
 GitHub Issues remain the source of task scope. `AGENTS.md` and repository documentation remain the source of stable project rules.
+
+RepoFlow deliberately does not contain project-specific frontend, backend, design-system, testing, or pull-request wording. Keep those rules in the target repository instead of duplicating them in PowerShell prompts. The agent prompts stay generic and provide the issue scope, applicable diagnostics, and changed-file hints.
+
+### Prompt and token strategy
+
+RepoFlow keeps agent context focused without weakening the issue boundary:
+
+- the full issue body is supplied as the authoritative scope;
+- review, CI, and pre-commit prompts prioritise files already changed by the branch;
+- long diagnostics preserve both the beginning and end while omitting the noisy middle;
+- repository-wide rules are read from `AGENTS.md`, not copied into every prompt;
+- Git, GitHub, commit, push, PR, CI, and merge operations remain controlled by RepoFlow.
 
 ## Commands
 
@@ -496,7 +508,7 @@ The implementation should continue to treat all external text as data, pass proc
 ## Roadmap
 
 - retained execution reports for agent runs;
-- richer run diagnostics and retained execution reports;
+- richer run diagnostics;
 - improved resume/recovery after interrupted local workflows;
 - packaging and installation as a reusable PowerShell module;
 - broader integration and security testing.

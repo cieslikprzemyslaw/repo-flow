@@ -189,6 +189,9 @@ function Write-RepoFlowFailedCiContext {
         [string]$Repository,
 
         [Parameter(Mandatory)]
+        [string]$BaseBranch,
+
+        [Parameter(Mandatory)]
         [string]$OutputPath
     )
 
@@ -202,6 +205,11 @@ function Write-RepoFlowFailedCiContext {
     $content.Add('')
     $content.Add("PR: #$PullRequestNumber")
     $content.Add("Issue: #$IssueNumber")
+    $content.Add('')
+    $content.Add('## Files changed by this pull request')
+    $content.Add('')
+    $content.Add((Format-RepoFlowChangedFiles `
+        -Files (Get-RepoFlowPullRequestChangedFiles -BaseBranch $BaseBranch)))
     $content.Add('')
 
     foreach ($check in $failedChecks) {
@@ -227,8 +235,10 @@ function Write-RepoFlowFailedCiContext {
                 $content.Add('No failed log output was available.')
             }
             else {
-                $maximumLength = [Math]::Min($logResult.Text.Length, 30000)
-                $content.Add($logResult.Text.Substring(0, $maximumLength))
+                $content.Add((Get-RepoFlowBoundedText `
+                    -Text $logResult.Text `
+                    -MaximumCharacters 24000 `
+                    -HeadCharacters 4000))
             }
 
             $content.Add('```')
@@ -271,6 +281,7 @@ function Invoke-RepoFlowCiFixAttempt {
             -PullRequestNumber ([int]$PullRequest.number) `
             -Checks $Checks `
             -Repository ([string]$Config.repository.slug) `
+            -BaseBranch ([string]$Config.repository.baseBranch) `
             -OutputPath $contextPath
 
         $prompt = New-RepoFlowCiFixPrompt `

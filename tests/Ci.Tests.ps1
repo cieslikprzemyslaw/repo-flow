@@ -72,3 +72,44 @@ Describe 'RepoFlow CI state handling' {
         }
     }
 }
+
+Describe 'RepoFlow CI diagnostics' {
+    InModuleScope RepoFlow {
+        It 'keeps the beginning and end of failed logs and lists PR files' {
+            $outputPath = Join-Path $TestDrive 'ci-context.md'
+            $longLog = ('HEAD' + ('A' * 16000) + ('B' * 16000) + 'TAIL')
+            $checks = @(
+                [pscustomobject]@{
+                    name = 'Validate'
+                    bucket = 'fail'
+                    link = 'https://github.com/owner/repository/actions/runs/12345'
+                }
+            )
+
+            Mock Get-RepoFlowPullRequestChangedFiles {
+                @('src/app/page.tsx', 'src/app/page.test.tsx')
+            }
+            Mock Invoke-RepoFlowCommand {
+                [pscustomobject]@{
+                    ExitCode = 0
+                    Text = $longLog
+                }
+            }
+
+            Write-RepoFlowFailedCiContext `
+                -IssueNumber 22 `
+                -PullRequestNumber 121 `
+                -Checks $checks `
+                -Repository 'owner/repository' `
+                -BaseBranch 'master' `
+                -OutputPath $outputPath
+
+            $context = Get-Content -LiteralPath $outputPath -Raw
+
+            $context | Should -Match 'src/app/page.tsx'
+            $context | Should -Match 'HEAD'
+            $context | Should -Match 'TAIL'
+            $context | Should -Match 'RepoFlow omitted'
+        }
+    }
+}

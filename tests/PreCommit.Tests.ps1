@@ -92,3 +92,38 @@ Describe 'RepoFlow pre-commit recovery' {
         }
     }
 }
+
+Describe 'RepoFlow pre-commit diagnostics' {
+    InModuleScope RepoFlow {
+        It 'lists changed files and keeps both ends of long hook output' {
+            $outputPath = Join-Path $TestDrive 'pre-commit-context.md'
+            $issue = [pscustomobject]@{
+                number = 67
+                title = 'Add company workspace switcher'
+            }
+            $failureText = 'HOOK-START' + ('A' * 16000) + ('B' * 16000) + 'HOOK-END'
+
+            Mock Get-RepoFlowWorkingTreeChangedFiles {
+                @('src/app/workspace.tsx')
+            }
+            Mock Invoke-RepoFlowCommand {
+                [pscustomobject]@{
+                    ExitCode = 0
+                    Text = 'diagnostic summary'
+                }
+            }
+
+            Write-RepoFlowPreCommitFailureContext `
+                -Issue $issue `
+                -FailureText $failureText `
+                -OutputPath $outputPath
+
+            $context = Get-Content -LiteralPath $outputPath -Raw
+
+            $context | Should -Match 'src/app/workspace.tsx'
+            $context | Should -Match 'HOOK-START'
+            $context | Should -Match 'HOOK-END'
+            $context | Should -Match 'RepoFlow omitted'
+        }
+    }
+}

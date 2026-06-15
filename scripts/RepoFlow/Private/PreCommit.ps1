@@ -61,18 +61,24 @@ function Write-RepoFlowPreCommitFailureContext {
             -AllowFailure
     ).Text
 
-    $maximumFailureLength = [Math]::Min($FailureText.Length, 30000)
-    $trimmedFailure = if ($maximumFailureLength -gt 0) {
-        $FailureText.Substring(0, $maximumFailureLength)
+    $trimmedFailure = if ([string]::IsNullOrWhiteSpace($FailureText)) {
+        'No commit-hook output was captured.'
     }
     else {
-        'No commit-hook output was captured.'
+        Get-RepoFlowBoundedText `
+            -Text $FailureText `
+            -MaximumCharacters 24000 `
+            -HeadCharacters 4000
     }
 
     $content = [System.Collections.Generic.List[string]]::new()
     $content.Add('# Pre-commit hook failure')
     $content.Add('')
     $content.Add("Issue: #$($Issue.number) $($Issue.title)")
+    $content.Add('')
+    $content.Add('## Changed files')
+    $content.Add('')
+    $content.Add((Format-RepoFlowChangedFiles -Files (Get-RepoFlowWorkingTreeChangedFiles)))
     $content.Add('')
     $content.Add('## Git status')
     $content.Add('')

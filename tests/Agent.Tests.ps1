@@ -311,3 +311,53 @@ Describe 'RepoFlow agent provider dispatch' {
         }
     }
 }
+
+Describe 'RepoFlow Claude error normalisation' {
+    InModuleScope RepoFlow {
+        It 'extracts Claude model errors from stream-json' {
+            $jsonLines = @'
+{"type":"assistant","message":{"content":[{"type":"text","text":"The selected model does not exist."}],"error":"model_not_found"}}
+{"type":"result","is_error":true,"api_error_status":404,"result":"The selected model does not exist."}
+'@
+
+            $result = Get-RepoFlowClaudeResult -JsonLines $jsonLines
+
+            $result.IsError | Should -BeTrue
+            $result.ErrorCode | Should -Be 'model_not_found'
+            $result.ErrorMessage | Should -Be 'The selected model does not exist.'
+        }
+
+        It 'returns a concise failure instead of the full Claude stream' {
+            $path = Join-Path $TestDrive 'claude-error.md'
+            $stream = @'
+{"type":"system","subtype":"init","model":"bad-model","tools":["Read","Edit"]}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Model is unavailable."}],"error":"model_not_found"}}
+{"type":"result","is_error":true,"result":"Model is unavailable."}
+'@
+
+            Mock Invoke-RepoFlowAgentProcessWithHeartbeat {
+                [pscustomobject]@{
+                    ExitCode = 0
+                    StandardOutput = $stream
+                    StandardError = ''
+                    DurationSeconds = 1
+                }
+            }
+
+            $result = Invoke-RepoFlowClaudeWithHeartbeat `
+                -RepositoryRoot $TestDrive `
+                -Prompt 'do work' `
+                -FinalMessagePath $path `
+                -ExecutablePath 'claude' `
+                -Model 'bad-model' `
+                -ReasoningEffort 'medium' `
+                -HeartbeatSeconds 5
+
+            $result.ExitCode | Should -Be 1
+            $result.ErrorCode | Should -Be 'model_not_found'
+            $result.Text | Should -BeLike "*bad-model*model_not_found*Model is unavailable*"
+            $result.Text | Should -Not -Match '"type":"system"'
+            Test-Path -LiteralPath $path | Should -BeFalse
+        }
+    }
+}
