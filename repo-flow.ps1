@@ -18,7 +18,7 @@ Shows the complete command list.
 .EXAMPLE
 .\repo-flow.ps1 issue run -Number 67 -Apply
 
-Implements issue #67 in the repository configured by repository.localPath.
+Implements issue #67 in the effective selected repository.
 
 .EXAMPLE
 .\repo-flow.ps1 pr merge -Number 116 -Apply
@@ -36,6 +36,7 @@ param(
         'branch',
         'ci',
         'config',
+        'repo',
         'help'
     )]
     [AllowNull()]
@@ -63,6 +64,10 @@ param(
 
     [ValidateSet('skip', 'observe', 'require-passing')]
     [string]$CiMode,
+
+    [Parameter(Position = 2)]
+    [Alias('Repository', 'RepositoryName')]
+    [string]$Repo,
 
     [string]$ConfigPath
 )

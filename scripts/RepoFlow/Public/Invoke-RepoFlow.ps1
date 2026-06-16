@@ -8,6 +8,7 @@ function Invoke-RepoFlow {
             'branch',
             'ci',
             'config',
+            'repo',
             'help'
         )]
         [AllowNull()]
@@ -36,6 +37,10 @@ function Invoke-RepoFlow {
         [ValidateSet('skip', 'observe', 'require-passing')]
         [string]$CiMode,
 
+        [Parameter(Position = 2)]
+        [Alias('Repository', 'RepositoryName')]
+        [string]$Repo,
+
         [string]$ConfigPath
     )
 
@@ -62,6 +67,7 @@ function Invoke-RepoFlow {
             Invoke-RepoFlowIssueSyncWorkflow `
                 -Apply:$Apply `
                 -SkipCreates:$SkipCreates `
+                -Repo $Repo `
                 -ConfigPath $ConfigPath
             return
         }
@@ -82,6 +88,7 @@ function Invoke-RepoFlow {
                 -Number $Number `
                 -Apply:$Apply `
                 -CiMode $CiMode `
+                -Repo $Repo `
                 -ConfigPath $ConfigPath
             return
         }
@@ -108,6 +115,7 @@ function Invoke-RepoFlow {
                 -PrCommentId $PrCommentId `
                 -Apply:$Apply `
                 -CiMode $CiMode `
+                -Repo $Repo `
                 -ConfigPath $ConfigPath
             return
         }
@@ -119,6 +127,7 @@ function Invoke-RepoFlow {
 
             Invoke-RepoFlowPrStatusWorkflow `
                 -Number $Number `
+                -Repo $Repo `
                 -ConfigPath $ConfigPath
             return
         }
@@ -130,6 +139,7 @@ function Invoke-RepoFlow {
 
             Invoke-RepoFlowPrWatchWorkflow `
                 -Number $Number `
+                -Repo $Repo `
                 -ConfigPath $ConfigPath
             return
         }
@@ -143,6 +153,7 @@ function Invoke-RepoFlow {
                 -Number $Number `
                 -Apply:$Apply `
                 -CiMode $CiMode `
+                -Repo $Repo `
                 -ConfigPath $ConfigPath
             return
         }
@@ -156,6 +167,7 @@ function Invoke-RepoFlow {
                 -Number $Number `
                 -Apply:$Apply `
                 -CiMode $CiMode `
+                -Repo $Repo `
                 -ConfigPath $ConfigPath
             return
         }
@@ -163,6 +175,7 @@ function Invoke-RepoFlow {
         'branch/cleanup' {
             Invoke-RepoFlowBranchCleanupWorkflow `
                 -Apply:$Apply `
+                -Repo $Repo `
                 -ConfigPath $ConfigPath
             return
         }
@@ -174,18 +187,53 @@ function Invoke-RepoFlow {
 
             Invoke-RepoFlowPrWatchWorkflow `
                 -Number $Number `
+                -Repo $Repo `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'repo/list' {
+            Invoke-RepoFlowRepositoryListWorkflow `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'repo/current' {
+            Invoke-RepoFlowRepositoryCurrentWorkflow `
+                -Repo $Repo `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'repo/use' {
+            if ([string]::IsNullOrWhiteSpace($Repo)) {
+                throw "'repo use' requires -Repo."
+            }
+
+            Invoke-RepoFlowRepositoryUseWorkflow `
+                -Repo $Repo `
+                -Apply:$Apply `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'repo/reset' {
+            Invoke-RepoFlowRepositoryResetWorkflow `
+                -Apply:$Apply `
                 -ConfigPath $ConfigPath
             return
         }
 
         'config/validate' {
             Invoke-RepoFlowConfigValidateWorkflow `
+                -Repo $Repo `
                 -ConfigPath $ConfigPath
             return
         }
 
         'config/show' {
             Invoke-RepoFlowConfigShowWorkflow `
+                -Repo $Repo `
                 -ConfigPath $ConfigPath
             return
         }

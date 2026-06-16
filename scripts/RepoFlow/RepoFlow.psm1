@@ -5,6 +5,7 @@ $privateFiles = @(
     'Help.ps1',
     'Command.ps1',
     'Configuration.ps1',
+    'Repositories.ps1',
     'Markdown.ps1',
     'GitHub.ps1',
     'Git.ps1',

@@ -29,6 +29,21 @@ Describe 'RepoFlow command dispatcher' {
             Should -Invoke Invoke-RepoFlowPrMergeWorkflow -Times 1 -Exactly
         }
 
+        It 'routes positional repository use commands' {
+            Mock Invoke-RepoFlowRepositoryUseWorkflow {
+                return
+            }
+
+            Invoke-RepoFlow repo use report -Apply
+
+            Should -Invoke `
+                Invoke-RepoFlowRepositoryUseWorkflow `
+                -Times 1 `
+                -Exactly `
+                -ParameterFilter {
+                    $Repo -eq 'report' -and $Apply
+                }
+        }
         It 'does not expose a PR preview command' {
             {
                 Invoke-RepoFlow -Area pr -Action preview -Number 66
