@@ -3,29 +3,49 @@ function New-RepoFlowContext {
     param(
         [string]$ConfigPath,
 
+        [string]$Repo,
+
         [switch]$RequireGitHub,
 
         [switch]$RequireAgent
     )
 
-    $repositoryRoot = Get-RepoFlowRepositoryRoot -ConfigPath $ConfigPath
+    $selection = Get-RepoFlowRepositorySelection `
+        -ConfigPath $ConfigPath `
+        -RepositoryName $Repo `
+        -CurrentDirectory (Get-Location).Path
+
+    $repositoryRoot = Get-RepoFlowRepositoryRoot `
+        -ConfigPath $ConfigPath `
+        -RepositoryName $Repo
+
     Set-Location -LiteralPath $repositoryRoot
-    $config = Read-RepoFlowConfiguration -RepositoryRoot $repositoryRoot -ConfigPath $ConfigPath
+
+    $config = Read-RepoFlowConfiguration `
+        -RepositoryRoot $repositoryRoot `
+        -ConfigPath $ConfigPath `
+        -RepositorySelection $selection
+
     Assert-RepoFlowRepositoryIdentity -Config $config
+    Show-RepoFlowRepositoryBanner -Selection $selection
 
     if ($RequireGitHub) {
         Assert-RepoFlowGitHubAuthentication
     }
 
     if ($RequireAgent) {
-        Resolve-RepoFlowExecutable -Command ([string]$config.agent.command) | Out-Null
+        Resolve-RepoFlowExecutable `
+            -Command ([string]$config.agent.command) |
+            Out-Null
     }
 
     return [pscustomobject]@{
         RepositoryRoot = $repositoryRoot
         Config = $config
+        RepositorySelection = $selection
     }
 }
+
 
 function Invoke-RepoFlowIssueRunWorkflow {
     [CmdletBinding()]
@@ -37,10 +57,12 @@ function Invoke-RepoFlowIssueRunWorkflow {
 
         [string]$CiMode,
 
-        [string]$ConfigPath
+        [string]$ConfigPath,
+
+        [string]$Repo
     )
 
-    $context = New-RepoFlowContext -ConfigPath $ConfigPath -RequireGitHub -RequireAgent:$Apply
+    $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo -RequireGitHub -RequireAgent:$Apply
     $config = $context.Config
     $repository = [string]$config.repository.slug
     $issue = Get-RepoFlowIssue -Number $Number -Repository $repository
@@ -202,10 +224,12 @@ function Invoke-RepoFlowIssueContinueWorkflow {
 
         [string]$CiMode,
 
-        [string]$ConfigPath
+        [string]$ConfigPath,
+
+        [string]$Repo
     )
 
-    $context = New-RepoFlowContext -ConfigPath $ConfigPath -RequireGitHub -RequireAgent:$Apply
+    $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo -RequireGitHub -RequireAgent:$Apply
     $config = $context.Config
     $repository = [string]$config.repository.slug
     $issue = Get-RepoFlowIssue -Number $Number -Repository $repository
@@ -354,10 +378,12 @@ function Invoke-RepoFlowPrStatusWorkflow {
         [Parameter(Mandatory)]
         [int]$Number,
 
-        [string]$ConfigPath
+        [string]$ConfigPath,
+
+        [string]$Repo
     )
 
-    $context = New-RepoFlowContext -ConfigPath $ConfigPath -RequireGitHub
+    $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo -RequireGitHub
     $pullRequest = Get-RepoFlowPullRequest -Number $Number -Repository ([string]$context.Config.repository.slug)
     $checks = Get-RepoFlowPrCheckState -PullRequestNumber $Number -Repository ([string]$context.Config.repository.slug)
     Show-RepoFlowPullRequestStatus -PullRequest $pullRequest -CheckState $checks
@@ -369,10 +395,12 @@ function Invoke-RepoFlowPrWatchWorkflow {
         [Parameter(Mandatory)]
         [int]$Number,
 
-        [string]$ConfigPath
+        [string]$ConfigPath,
+
+        [string]$Repo
     )
 
-    $context = New-RepoFlowContext -ConfigPath $ConfigPath -RequireGitHub
+    $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo -RequireGitHub
     $pullRequest = Get-RepoFlowPullRequest -Number $Number -Repository ([string]$context.Config.repository.slug)
     $checks = Wait-RepoFlowPrChecks `
         -PullRequestNumber $Number `
@@ -392,10 +420,12 @@ function Invoke-RepoFlowPrReadyWorkflow {
 
         [string]$CiMode,
 
-        [string]$ConfigPath
+        [string]$ConfigPath,
+
+        [string]$Repo
     )
 
-    $context = New-RepoFlowContext -ConfigPath $ConfigPath -RequireGitHub
+    $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo -RequireGitHub
     $config = $context.Config
     $repository = [string]$config.repository.slug
     $pullRequest = Get-RepoFlowPullRequest -Number $Number -Repository $repository
@@ -442,10 +472,12 @@ function Invoke-RepoFlowPrMergeWorkflow {
 
         [string]$CiMode,
 
-        [string]$ConfigPath
+        [string]$ConfigPath,
+
+        [string]$Repo
     )
 
-    $context = New-RepoFlowContext -ConfigPath $ConfigPath -RequireGitHub
+    $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo -RequireGitHub
     $config = $context.Config
     $repository = [string]$config.repository.slug
     $pullRequest = Get-RepoFlowPullRequest `
@@ -572,10 +604,12 @@ function Invoke-RepoFlowIssueSyncWorkflow {
 
         [switch]$SkipCreates,
 
-        [string]$ConfigPath
+        [string]$ConfigPath,
+
+        [string]$Repo
     )
 
-    $context = New-RepoFlowContext -ConfigPath $ConfigPath -RequireGitHub
+    $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo -RequireGitHub
     Invoke-RepoFlowIssueSync `
         -RepositoryRoot $context.RepositoryRoot `
         -Config $context.Config `
@@ -588,29 +622,35 @@ function Invoke-RepoFlowBranchCleanupWorkflow {
     param(
         [switch]$Apply,
 
-        [string]$ConfigPath
+        [string]$ConfigPath,
+
+        [string]$Repo
     )
 
-    $context = New-RepoFlowContext -ConfigPath $ConfigPath -RequireGitHub
+    $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo -RequireGitHub
     Invoke-RepoFlowBranchCleanup -Config $context.Config -Apply:$Apply
 }
 
 function Invoke-RepoFlowConfigValidateWorkflow {
     [CmdletBinding()]
     param(
-        [string]$ConfigPath
+        [string]$ConfigPath,
+
+        [string]$Repo
     )
 
-    $context = New-RepoFlowContext -ConfigPath $ConfigPath
+    $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo
     Write-Host "Configuration is valid: $($context.Config.configPath)"
 }
 
 function Invoke-RepoFlowConfigShowWorkflow {
     [CmdletBinding()]
     param(
-        [string]$ConfigPath
+        [string]$ConfigPath,
+
+        [string]$Repo
     )
 
-    $context = New-RepoFlowContext -ConfigPath $ConfigPath
+    $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo
     Show-RepoFlowConfiguration -Config $context.Config
 }

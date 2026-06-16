@@ -114,12 +114,13 @@ Create a local configuration:
 Copy-Item .\repo-flow.example.json .\.repo-flow.json
 ```
 
-Edit `.repo-flow.json` and set at least:
+Edit `.repo-flow.json` and configure either:
 
-- `repository.localPath`;
-- `repository.slug`;
-- `repository.expectedOrigins`;
-- `repository.baseBranch`.
+- the legacy `repository` object; or
+- `defaultRepository` with `repositories[]`.
+
+Each registered repository defines `name`, `localPath`, `slug`,
+`expectedOrigins`, and `baseBranch`.
 
 The local `.repo-flow.json` is ignored by Git because it can contain machine-specific paths. The example file is committed instead.
 
@@ -212,6 +213,68 @@ A minimal workflow configuration looks like this:
 ```
 
 Do not store tokens, passwords, API keys, or executable PowerShell in the configuration.
+
+### Multiple repositories
+
+One configuration can register several target repositories:
+
+```json
+{
+  "defaultRepository": "example-app",
+  "repositories": [
+    {
+      "name": "example-app",
+      "localPath": "C:\\Projects\\RepoFlow\\example-app",
+      "slug": "owner/example-app",
+      "expectedOrigins": [
+        "https://github.com/owner/example-app.git",
+        "git@github.com:owner/example-app.git"
+      ],
+      "baseBranch": "main"
+    },
+    {
+      "name": "repo-flow",
+      "localPath": "C:\\Projects\\RepoFlow\\repo-flow",
+      "slug": "owner/repo-flow",
+      "expectedOrigins": [
+        "https://github.com/owner/repo-flow.git",
+        "git@github.com:owner/repo-flow.git"
+      ],
+      "baseBranch": "main"
+    }
+  ]
+}
+```
+
+Repository selection uses this order:
+
+1. explicit `-Repo`;
+2. the registered repository containing the current directory;
+3. the repository stored by `repo use`;
+4. `defaultRepository`;
+5. the legacy `repository` object.
+
+The active selection is stored locally in `.repo-flow.state.json` beside the
+configuration file. It is ignored by Git and contains only the selected name.
+
+```powershell
+repo-flow repo list
+repo-flow repo current
+repo-flow repo use -Repo repo-flow
+repo-flow repo use -Repo repo-flow -Apply
+repo-flow repo reset -Apply
+
+repo-flow issue run -Number 12 -Repo repo-flow -Apply
+repo-flow pr status -Number 12 -Repo repo-flow
+```
+
+Selecting a repository does not change the caller's working directory.
+RepoFlow still validates the configured path and Git remote before running a
+repository workflow.
+
+Issue manifests, `AGENTS.md`, repository documentation, issue templates, and
+pull-request templates stay inside each target repository. RepoFlow does not
+copy project-specific frontend or backend rules into the shared configuration.
 
 ### Agent provider
 
@@ -468,7 +531,10 @@ Reload it:
 Then run:
 
 ```powershell
+repo-flow repo list
+repo-flow repo current
 repo-flow issue run -Number 67
+repo-flow issue run -Number 12 -Repo repo-flow -Apply
 repo-flow pr status -Number 116
 ```
 
@@ -502,7 +568,6 @@ The implementation should continue to treat all external text as data, pass proc
 
 - PR feedback supports top-level comments, not inline review threads.
 - RepoFlow is designed around GitHub and GitHub CLI.
-- Configuration currently targets one repository per config file; use `-ConfigPath` for additional repositories.
 - The project is pre-`v1.0` and may introduce breaking changes.
 
 ## Roadmap
@@ -510,7 +575,7 @@ The implementation should continue to treat all external text as data, pass proc
 - retained execution reports for agent runs;
 - richer run diagnostics;
 - improved resume/recovery after interrupted local workflows;
-- packaging and installation as a reusable PowerShell module;
+- full CLI packaging and installation as a reusable PowerShell module (deferred until the workflows stabilise);
 - broader integration and security testing.
 
 ## Contributing

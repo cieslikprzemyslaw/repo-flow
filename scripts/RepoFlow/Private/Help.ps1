@@ -57,6 +57,18 @@ Commands:
   config show
       Display the effective non-sensitive configuration.
 
+  repo list
+      Display registered repositories and selection markers.
+
+  repo current
+      Display the effective repository and selection source.
+
+  repo use
+      Plan or store an active repository selection.
+
+  repo reset
+      Plan or remove the active repository selection.
+
 Safety:
   Commands are plan-only by default.
   Add -Apply to perform Git or GitHub mutations.
@@ -66,11 +78,13 @@ Common options:
   -Number <number>
   -Apply
   -CiMode skip|observe|require-passing
+  -Repo <name>
   -ConfigPath <path>
 
 Aliases:
   -IssueNumber and -PrNumber are aliases for -Number.
   -Run is an alias for -Apply.
+  -Repository and -RepositoryName are aliases for -Repo.
   'pr accept' is an alias for 'pr merge'.
 
 Help examples:
@@ -267,6 +281,80 @@ Example:
 '@
         }
 
+        'repo' {
+            return @'
+RepoFlow repository commands
+
+  .\repo-flow.ps1 repo list
+  .\repo-flow.ps1 repo current
+  .\repo-flow.ps1 repo current -Repo <name>
+  .\repo-flow.ps1 repo use -Repo <name>
+  .\repo-flow.ps1 repo use -Repo <name> -Apply
+  .\repo-flow.ps1 repo reset
+  .\repo-flow.ps1 repo reset -Apply
+
+Selection precedence:
+  explicit -Repo
+  current working directory
+  stored active repository
+  configured default repository
+  legacy repository configuration
+'@
+        }
+
+        'repo/list' {
+            return @'
+repo list
+
+Displays every registered repository with default, active, current-directory,
+and legacy markers.
+
+Example:
+  .\repo-flow.ps1 repo list
+'@
+        }
+
+        'repo/current' {
+            return @'
+repo current
+
+Displays the effective selected repository and selection source.
+
+Examples:
+  .\repo-flow.ps1 repo current
+  .\repo-flow.ps1 repo current -Repo repo-flow
+'@
+        }
+
+        'repo/use' {
+            return @'
+repo use
+
+Stores an active repository selection beside .repo-flow.json.
+It does not change the shell working directory.
+
+Plan:
+  .\repo-flow.ps1 repo use -Repo repo-flow
+
+Apply:
+  .\repo-flow.ps1 repo use -Repo repo-flow -Apply
+'@
+        }
+
+        'repo/reset' {
+            return @'
+repo reset
+
+Removes the stored active repository selection.
+
+Plan:
+  .\repo-flow.ps1 repo reset
+
+Apply:
+  .\repo-flow.ps1 repo reset -Apply
+'@
+        }
+
         'config' {
             return @'
 RepoFlow configuration commands
@@ -275,7 +363,7 @@ RepoFlow configuration commands
   .\repo-flow.ps1 config show
 
 The default configuration file is .repo-flow.json beside repo-flow.ps1.
-repository.localPath may point to a repository anywhere on the machine.
+Use either legacy repository.localPath or defaultRepository with repositories[].
 '@
         }
 

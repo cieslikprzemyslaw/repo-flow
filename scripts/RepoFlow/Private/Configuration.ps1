@@ -21,87 +21,6 @@ function Resolve-RepoFlowConfigPath {
     )
 }
 
-function Get-RepoFlowRepositoryRoot {
-    [CmdletBinding()]
-    param(
-        [AllowNull()]
-        [AllowEmptyString()]
-        [string]$ConfigPath
-    )
-
-    Assert-RepoFlowCommand -Name 'git'
-
-    $resolvedConfigPath = Resolve-RepoFlowConfigPath -ConfigPath $ConfigPath
-    $configuredLocalPath = $null
-
-    if (Test-Path -LiteralPath $resolvedConfigPath) {
-        try {
-            $bootstrap = Get-Content -LiteralPath $resolvedConfigPath -Raw |
-                ConvertFrom-Json -ErrorAction Stop
-
-            if (
-                $null -ne $bootstrap.repository -and
-                $null -ne $bootstrap.repository.PSObject.Properties['localPath']
-            ) {
-                $configuredLocalPath = [string]$bootstrap.repository.localPath
-            }
-        }
-        catch {
-            throw "RepoFlow configuration contains invalid JSON: $resolvedConfigPath"
-        }
-    }
-
-    $candidatePath = if (
-        -not [string]::IsNullOrWhiteSpace($configuredLocalPath)
-    ) {
-        if ([System.IO.Path]::IsPathRooted($configuredLocalPath)) {
-            [System.IO.Path]::GetFullPath($configuredLocalPath)
-        }
-        else {
-            $configDirectory = Split-Path -Parent $resolvedConfigPath
-            [System.IO.Path]::GetFullPath(
-                (Join-Path $configDirectory $configuredLocalPath)
-            )
-        }
-    }
-    else {
-        (Get-Location).Path
-    }
-
-    if (-not (Test-Path -LiteralPath $candidatePath -PathType Container)) {
-        throw "Configured repository path does not exist: $candidatePath"
-    }
-
-    $result = Invoke-RepoFlowCommand `
-        -Command 'git' `
-        -Arguments @(
-            '-C',
-            $candidatePath,
-            'rev-parse',
-            '--show-toplevel'
-        ) `
-        -AllowFailure
-
-    if ($result.ExitCode -ne 0) {
-        if (-not [string]::IsNullOrWhiteSpace($configuredLocalPath)) {
-            throw "Configured repository path is not a Git repository: $candidatePath"
-        }
-
-        throw (
-            'RepoFlow could not locate a Git repository. Set ' +
-            "'repository.localPath' in $resolvedConfigPath or run inside a repository."
-        )
-    }
-
-    $root = $result.Text.Trim()
-
-    if ([string]::IsNullOrWhiteSpace($root)) {
-        throw "Git did not return a repository root for: $candidatePath"
-    }
-
-    return [System.IO.Path]::GetFullPath($root)
-}
-
 function Assert-RepoFlowAllowedProperties {
     [CmdletBinding()]
     param(
@@ -140,13 +59,28 @@ function Get-RepoFlowProperty {
     )
 
     if ($null -eq $Object) {
+        if ($Default -is [System.Array]) {
+            Write-Output -NoEnumerate $Default
+            return
+        }
+
         return $Default
     }
 
     $property = $Object.PSObject.Properties[$Name]
 
     if ($null -eq $property -or $null -eq $property.Value) {
+        if ($Default -is [System.Array]) {
+            Write-Output -NoEnumerate $Default
+            return
+        }
+
         return $Default
+    }
+
+    if ($property.Value -is [System.Array]) {
+        Write-Output -NoEnumerate $property.Value
+        return
     }
 
     return $property.Value
@@ -277,35 +211,28 @@ function Read-RepoFlowConfiguration {
         [Parameter(Mandatory)]
         [string]$RepositoryRoot,
 
-        [string]$ConfigPath
+        [string]$ConfigPath,
+
+        [AllowNull()]
+        $RepositorySelection
     )
 
-    $resolvedConfigPath = if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
-        Join-Path $RepositoryRoot '.repo-flow.json'
-    }
-    elseif ([System.IO.Path]::IsPathRooted($ConfigPath)) {
-        [System.IO.Path]::GetFullPath($ConfigPath)
+    $selection = if ($null -eq $RepositorySelection) {
+        Get-RepoFlowRepositorySelection -ConfigPath $ConfigPath
     }
     else {
-        Resolve-RepoFlowPath -RepositoryRoot $RepositoryRoot -Path $ConfigPath
+        $RepositorySelection
     }
 
-    if (-not (Test-Path -LiteralPath $resolvedConfigPath)) {
-        throw "RepoFlow configuration was not found: $resolvedConfigPath"
-    }
-
-    $json = Get-Content -LiteralPath $resolvedConfigPath -Raw
-
-    try {
-        $raw = $json | ConvertFrom-Json
-    }
-    catch {
-        throw "RepoFlow configuration contains invalid JSON: $resolvedConfigPath"
-    }
+    $registry = $selection.Registry
+    $raw = $registry.Raw
+    $resolvedConfigPath = [string]$registry.ConfigPath
 
     Assert-RepoFlowAllowedProperties -Object $raw -Path '$' -Allowed @(
         '$schema',
         'repository',
+        'defaultRepository',
+        'repositories',
         'issues',
         'git',
         'agent',
@@ -315,7 +242,6 @@ function Read-RepoFlowConfiguration {
         'reviewFeedback'
     )
 
-    $repository = Get-RepoFlowProperty -Object $raw -Name 'repository' -Default $null
     $issues = Get-RepoFlowProperty -Object $raw -Name 'issues' -Default $null
     $git = Get-RepoFlowProperty -Object $raw -Name 'git' -Default $null
     $agent = Get-RepoFlowProperty -Object $raw -Name 'agent' -Default $null
@@ -324,12 +250,6 @@ function Read-RepoFlowConfiguration {
     $ci = Get-RepoFlowProperty -Object $raw -Name 'ci' -Default $null
     $reviewFeedback = Get-RepoFlowProperty -Object $raw -Name 'reviewFeedback' -Default $null
 
-    Assert-RepoFlowAllowedProperties -Object $repository -Path '$.repository' -Allowed @(
-        'localPath',
-        'slug',
-        'expectedOrigins',
-        'baseBranch'
-    )
     Assert-RepoFlowAllowedProperties -Object $issues -Path '$.issues' -Allowed @('manifestPath')
     Assert-RepoFlowAllowedProperties -Object $git -Path '$.git' -Allowed @(
         'requireCleanWorkingTree',
@@ -373,10 +293,6 @@ function Read-RepoFlowConfiguration {
         'trustedAssociations'
     )
 
-    $repositoryLocalPath = Get-RepoFlowProperty -Object $repository -Name 'localPath' -Default $RepositoryRoot
-    $repositorySlug = Get-RepoFlowProperty -Object $repository -Name 'slug' -Default ''
-    $expectedOrigins = Get-RepoFlowProperty -Object $repository -Name 'expectedOrigins' -Default @()
-    $baseBranch = Get-RepoFlowProperty -Object $repository -Name 'baseBranch' -Default 'main'
     $manifestPath = Get-RepoFlowProperty -Object $issues -Name 'manifestPath' -Default './issues-manifest.json'
 
     $requireCleanWorkingTree = Get-RepoFlowProperty -Object $git -Name 'requireCleanWorkingTree' -Default $true
@@ -414,13 +330,6 @@ function Read-RepoFlowConfiguration {
     $confirmBeforeRun = Get-RepoFlowProperty -Object $reviewFeedback -Name 'confirmBeforeRun' -Default $true
     $trustedAssociations = Get-RepoFlowProperty -Object $reviewFeedback -Name 'trustedAssociations' -Default @('OWNER')
 
-    Assert-RepoFlowString -Value $repositoryLocalPath -Path '$.repository.localPath'
-    Assert-RepoFlowString -Value $repositorySlug -Path '$.repository.slug'
-    Assert-RepoFlowArray -Value $expectedOrigins -Path '$.repository.expectedOrigins'
-    foreach ($originValue in @($expectedOrigins)) {
-        Assert-RepoFlowString -Value $originValue -Path '$.repository.expectedOrigins[]'
-    }
-    Assert-RepoFlowString -Value $baseBranch -Path '$.repository.baseBranch'
     Assert-RepoFlowString -Value $manifestPath -Path '$.issues.manifestPath'
 
     Assert-RepoFlowBoolean -Value $requireCleanWorkingTree -Path '$.git.requireCleanWorkingTree'
@@ -457,17 +366,34 @@ function Read-RepoFlowConfiguration {
     Assert-RepoFlowBoolean -Value $feedbackEnabled -Path '$.reviewFeedback.enabled'
     Assert-RepoFlowBoolean -Value $confirmBeforeRun -Path '$.reviewFeedback.confirmBeforeRun'
     Assert-RepoFlowArray -Value $trustedAssociations -Path '$.reviewFeedback.trustedAssociations'
+
     foreach ($associationValue in @($trustedAssociations)) {
         Assert-RepoFlowString -Value $associationValue -Path '$.reviewFeedback.trustedAssociations[]'
     }
 
+    $selectedRepository = $selection.Repository
+
     $config = [pscustomobject]@{
         configPath = $resolvedConfigPath
+        selectedRepository = [string]$selectedRepository.name
+        repositorySelectionSource = [string]$selection.Source
+        defaultRepository = if ($registry.IsLegacy) {
+            $null
+        }
+        else {
+            [string]$registry.DefaultRepository
+        }
+        repositories = @($registry.Repositories)
+        isLegacyRepositoryConfiguration = [bool]$registry.IsLegacy
         repository = [pscustomobject]@{
+            name = [string]$selectedRepository.name
             localPath = [System.IO.Path]::GetFullPath([string]$RepositoryRoot)
-            slug = [string]$repositorySlug
-            expectedOrigins = @($expectedOrigins | ForEach-Object { [string]$_ })
-            baseBranch = [string]$baseBranch
+            slug = [string]$selectedRepository.slug
+            expectedOrigins = @(
+                $selectedRepository.expectedOrigins |
+                ForEach-Object { [string]$_ }
+            )
+            baseBranch = [string]$selectedRepository.baseBranch
         }
         issues = [pscustomobject]@{
             manifestPath = [string]$manifestPath
@@ -516,7 +442,10 @@ function Read-RepoFlowConfiguration {
         reviewFeedback = [pscustomobject]@{
             enabled = [bool]$feedbackEnabled
             confirmBeforeRun = [bool]$confirmBeforeRun
-            trustedAssociations = @($trustedAssociations | ForEach-Object { [string]$_ })
+            trustedAssociations = @(
+                $trustedAssociations |
+                ForEach-Object { [string]$_ }
+            )
         }
     }
 
@@ -591,7 +520,8 @@ function Assert-RepoFlowConfiguration {
                 verb = 'Implement'
                 issueNumber = 1
                 issueTitle = 'Example issue'
-            } | Out-Null
+            } |
+            Out-Null
     }
 
     if ($Config.ci.mode -notin @('skip', 'observe', 'require-passing')) {
@@ -610,6 +540,7 @@ function Assert-RepoFlowConfiguration {
     Assert-RepoFlowBoolean -Value $Config.reviewFeedback.confirmBeforeRun -Path '$.reviewFeedback.confirmBeforeRun'
 
     $trusted = @($Config.reviewFeedback.trustedAssociations)
+
     if ($trusted.Count -eq 0) {
         throw "Configuration value '$.reviewFeedback.trustedAssociations' must contain at least one value."
     }
@@ -646,6 +577,10 @@ function Show-RepoFlowConfiguration {
 
     $display = [ordered]@{
         configPath = $Config.configPath
+        selectedRepository = $Config.selectedRepository
+        repositorySelectionSource = $Config.repositorySelectionSource
+        defaultRepository = $Config.defaultRepository
+        repositories = $Config.repositories
         repository = $Config.repository
         issues = $Config.issues
         git = $Config.git
@@ -656,5 +591,5 @@ function Show-RepoFlowConfiguration {
         reviewFeedback = $Config.reviewFeedback
     }
 
-    $display | ConvertTo-Json -Depth 8
+    $display | ConvertTo-Json -Depth 10
 }

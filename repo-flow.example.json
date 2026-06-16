@@ -1,14 +1,28 @@
 {
   "$schema": "./scripts/RepoFlow/repo-flow.schema.json",
-  "repository": {
-    "localPath": "C:\\Projects\\repo-flow",
-    "slug": "owner/repository",
-    "expectedOrigins": [
-      "https://github.com/owner/repository.git",
-      "git@github.com:owner/repository.git"
-    ],
-    "baseBranch": "main"
-  },
+  "defaultRepository": "example-app",
+  "repositories": [
+    {
+      "name": "example-app",
+      "localPath": "C:\\Projects\\RepoFlow\\example-app",
+      "slug": "owner/example-app",
+      "expectedOrigins": [
+        "https://github.com/owner/example-app.git",
+        "git@github.com:owner/example-app.git"
+      ],
+      "baseBranch": "main"
+    },
+    {
+      "name": "repo-flow",
+      "localPath": "C:\\Projects\\RepoFlow\\repo-flow",
+      "slug": "owner/repo-flow",
+      "expectedOrigins": [
+        "https://github.com/owner/repo-flow.git",
+        "git@github.com:owner/repo-flow.git"
+      ],
+      "baseBranch": "main"
+    }
+  ],
   "issues": {
     "manifestPath": "./issues-manifest.json"
   },
@@ -20,12 +34,12 @@
     "preCommitFixAttempts": 1
   },
   "agent": {
-    "provider": "codex",
-    "command": "codex",
-    "model": "gpt-5.5",
+    "provider": "claude",
+    "command": "claude",
+    "model": "claude-sonnet-4-6",
     "minimumCliVersion": null,
     "heartbeatSeconds": 15,
-    "reasoningEffort": "medium",
+    "reasoningEffort": "low",
     "ciFixReasoningEffort": "low",
     "preCommitFixReasoningEffort": "low",
     "runProjectChecks": false

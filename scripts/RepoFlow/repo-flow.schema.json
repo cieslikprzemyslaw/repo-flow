@@ -5,7 +5,6 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "repository",
     "issues",
     "git",
     "agent",
@@ -14,13 +13,78 @@
     "ci",
     "reviewFeedback"
   ],
-  "properties": {
-    "$schema": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Optional editor schema reference used for validation and autocomplete."
+  "oneOf": [
+    {
+      "required": [
+        "repository"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "repositories"
+            ]
+          },
+          {
+            "required": [
+              "defaultRepository"
+            ]
+          }
+        ]
+      }
     },
+    {
+      "required": [
+        "repositories",
+        "defaultRepository"
+      ],
+      "not": {
+        "required": [
+          "repository"
+        ]
+      }
+    }
+  ],
+  "$defs": {
     "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "localPath",
+        "slug",
+        "expectedOrigins",
+        "baseBranch"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "localPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[^/\\s]+/[^/\\s]+$"
+        },
+        "expectedOrigins": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "baseBranch": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "legacyRepository": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -31,13 +95,11 @@
       "properties": {
         "localPath": {
           "type": "string",
-          "minLength": 1,
-          "description": "Local path to the Git repository managed by RepoFlow. Relative paths are resolved from the directory containing .repo-flow.json."
+          "minLength": 1
         },
         "slug": {
           "type": "string",
-          "pattern": "^[^/\\s]+/[^/\\s]+$",
-          "description": "GitHub repository in owner/repository format."
+          "pattern": "^[^/\\s]+/[^/\\s]+$"
         },
         "expectedOrigins": {
           "type": "array",
@@ -46,16 +108,33 @@
           "items": {
             "type": "string",
             "minLength": 1
-          },
-          "description": "Accepted origin remote URLs. RepoFlow stops when the current repository origin is not listed."
+          }
         },
         "baseBranch": {
           "type": "string",
-          "minLength": 1,
-          "description": "Branch used as the source for issue branches and expected pull-request target."
+          "minLength": 1
         }
-      },
-      "description": "GitHub repository identity and base-branch settings."
+      }
+    }
+  },
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repository": {
+      "$ref": "#/$defs/legacyRepository"
+    },
+    "defaultRepository": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repositories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/repository"
+      }
     },
     "issues": {
       "type": "object",
@@ -66,11 +145,9 @@
       "properties": {
         "manifestPath": {
           "type": "string",
-          "minLength": 1,
-          "description": "Repository-relative path to the issue manifest used by issue sync."
+          "minLength": 1
         }
-      },
-      "description": "Issue-manifest settings."
+      }
     },
     "git": {
       "type": "object",
@@ -79,33 +156,28 @@
         "requireCleanWorkingTree",
         "deleteMergedLocalBranches",
         "pruneRemoteReferences",
-        "signOffCommits"
+        "signOffCommits",
+        "preCommitFixAttempts"
       ],
       "properties": {
         "requireCleanWorkingTree": {
-          "type": "boolean",
-          "description": "Stop before branch or file mutations when the working tree is not clean."
+          "type": "boolean"
         },
         "deleteMergedLocalBranches": {
-          "type": "boolean",
-          "description": "Delete a local branch only after its pull request is confirmed merged into the configured base branch."
+          "type": "boolean"
         },
         "pruneRemoteReferences": {
-          "type": "boolean",
-          "description": "Prune stale remote-tracking branch references during cleanup."
+          "type": "boolean"
         },
         "signOffCommits": {
-          "type": "boolean",
-          "description": "Use git commit -s and append a Signed-off-by trailer. This is DCO sign-off, not cryptographic commit signing."
+          "type": "boolean"
         },
         "preCommitFixAttempts": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 3,
-          "description": "Number of focused automatic agent attempts after a git commit is blocked by a pre-commit hook."
+          "maximum": 3
         }
-      },
-      "description": "Git safety and cleanup settings."
+      }
     },
     "agent": {
       "type": "object",
@@ -127,36 +199,27 @@
           "enum": [
             "codex",
             "claude"
-          ],
-          "description": "Coding-agent provider. Supported values are codex and claude."
+          ]
         },
         "command": {
           "type": "string",
-          "minLength": 1,
-          "description": "Executable name or path used to start the coding agent."
+          "minLength": 1
         },
         "model": {
           "type": "string",
-          "minLength": 1,
-          "description": "Agent model passed explicitly to the selected CLI with --model. This is independent of the CLI executable version."
+          "minLength": 1
         },
         "minimumCliVersion": {
           "type": [
             "string",
             "null"
           ],
-          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
-          "description": "Optional minimum semantic version for the configured agent CLI. Use null to allow any installed version."
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
         },
         "heartbeatSeconds": {
           "type": "integer",
           "minimum": 5,
-          "maximum": 300,
-          "description": "Interval in seconds between agent progress messages."
-        },
-        "runProjectChecks": {
-          "type": "boolean",
-          "description": "Whether the agent is instructed to run project checks defined by AGENTS.md."
+          "maximum": 300
         },
         "reasoningEffort": {
           "type": "string",
@@ -166,8 +229,7 @@
             "medium",
             "high",
             "xhigh"
-          ],
-          "description": "Reasoning effort used for initial issue implementation and PR review-feedback runs."
+          ]
         },
         "ciFixReasoningEffort": {
           "type": "string",
@@ -177,8 +239,7 @@
             "medium",
             "high",
             "xhigh"
-          ],
-          "description": "Reasoning effort used for focused automatic CI-fix runs. A lower value reduces usage for narrow fixes."
+          ]
         },
         "preCommitFixReasoningEffort": {
           "type": "string",
@@ -188,28 +249,29 @@
             "medium",
             "high",
             "xhigh"
-          ],
-          "description": "Reasoning effort used for focused fixes after a pre-commit hook blocks git commit."
+          ]
+        },
+        "runProjectChecks": {
+          "type": "boolean"
         }
-      },
-      "description": "Coding-agent adapter and execution settings."
+      }
     },
     "pullRequest": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "createDraft",
-        "templatePath"
+        "templatePath",
+        "mergeMethod",
+        "deleteBranchOnMerge"
       ],
       "properties": {
         "createDraft": {
-          "type": "boolean",
-          "description": "Create new pull requests as drafts when true."
+          "type": "boolean"
         },
         "templatePath": {
           "type": "string",
-          "minLength": 1,
-          "description": "Repository-relative path to the pull-request template."
+          "minLength": 1
         },
         "mergeMethod": {
           "type": "string",
@@ -217,15 +279,12 @@
             "squash",
             "merge",
             "rebase"
-          ],
-          "description": "Merge method used by pr merge and pr accept."
+          ]
         },
         "deleteBranchOnMerge": {
-          "type": "boolean",
-          "description": "Delete the remote head branch after GitHub confirms a successful merge."
+          "type": "boolean"
         }
-      },
-      "description": "Pull-request creation settings."
+      }
     },
     "messages": {
       "type": "object",
@@ -239,26 +298,21 @@
       "properties": {
         "initialCommit": {
           "type": "string",
-          "minLength": 1,
-          "description": "Commit message template for the initial issue implementation."
+          "minLength": 1
         },
         "reviewCommit": {
           "type": "string",
-          "minLength": 1,
-          "description": "Commit message template for changes based on PR review feedback."
+          "minLength": 1
         },
         "ciFixCommit": {
           "type": "string",
-          "minLength": 1,
-          "description": "Commit message template for focused automatic CI fixes."
+          "minLength": 1
         },
         "pullRequestTitle": {
           "type": "string",
-          "minLength": 1,
-          "description": "Title template for a newly created pull request."
+          "minLength": 1
         }
-      },
-      "description": "Templates for generated commit messages and pull-request titles."
+      }
     },
     "ci": {
       "type": "object",
@@ -276,29 +330,24 @@
             "skip",
             "observe",
             "require-passing"
-          ],
-          "description": "CI policy: skip, observe, or require-passing."
+          ]
         },
         "pollSeconds": {
           "type": "integer",
           "minimum": 10,
-          "maximum": 300,
-          "description": "Seconds between GitHub check-status polls."
+          "maximum": 300
         },
         "timeoutSeconds": {
           "type": "integer",
           "minimum": 30,
-          "maximum": 7200,
-          "description": "Maximum seconds to wait for one CI observation cycle."
+          "maximum": 7200
         },
         "autoFixAttempts": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 5,
-          "description": "Maximum focused automatic CI-fix attempts. Must be zero unless mode is require-passing."
+          "maximum": 5
         }
-      },
-      "description": "Pull-request check observation and automatic-fix policy."
+      }
     },
     "reviewFeedback": {
       "type": "object",
@@ -310,12 +359,10 @@
       ],
       "properties": {
         "enabled": {
-          "type": "boolean",
-          "description": "Allow issue continue with -LastPrComment or -PrCommentId."
+          "type": "boolean"
         },
         "confirmBeforeRun": {
-          "type": "boolean",
-          "description": "Ask for confirmation after displaying the selected PR comment and before mutations."
+          "type": "boolean"
         },
         "trustedAssociations": {
           "type": "array",
@@ -328,11 +375,9 @@
               "MEMBER",
               "COLLABORATOR"
             ]
-          },
-          "description": "GitHub author associations allowed to supply review feedback."
+          }
         }
-      },
-      "description": "Settings for continuing an open PR from a selected top-level PR comment."
+      }
     }
   }
 }
