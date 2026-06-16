@@ -380,37 +380,8 @@ function Get-RepoFlowRepositorySelection {
         }
     }
 
-    $directory = if ([string]::IsNullOrWhiteSpace($CurrentDirectory)) {
-        (Get-Location).Path
-    }
-    else {
-        $CurrentDirectory
-    }
-
-    $directoryMatches = @(
-        $registry.Repositories |
-        Where-Object {
-            Test-RepoFlowPathWithinRepository `
-                -RepositoryPath ([string]$_.localPath) `
-                -CandidatePath $directory
-        } |
-        Sort-Object `
-            -Property @{ Expression = { ([string]$_.localPath).Length } } `
-            -Descending
-    )
-
-    if ($directoryMatches.Count -gt 0) {
-        $selected = $directoryMatches[0]
-
-        return [pscustomobject]@{
-            Registry = $registry
-            Repository = $selected
-            RepositoryRoot = [string]$selected.localPath
-            Source = 'current-directory'
-        }
-    }
-
-    $state = Read-RepoFlowRepositoryState -ConfigPath $registry.ConfigPath
+    $state = Read-RepoFlowRepositoryState `
+        -ConfigPath $registry.ConfigPath
 
     if ($null -ne $state) {
         $selected = Find-RepoFlowRepositoryByName `
@@ -432,6 +403,42 @@ function Get-RepoFlowRepositorySelection {
         }
     }
 
+    $directory = if (
+        [string]::IsNullOrWhiteSpace($CurrentDirectory)
+    ) {
+        (Get-Location).Path
+    }
+    else {
+        $CurrentDirectory
+    }
+
+    $directoryMatches = @(
+        $registry.Repositories |
+            Where-Object {
+                Test-RepoFlowPathWithinRepository `
+                    -RepositoryPath ([string]$_.localPath) `
+                    -CandidatePath $directory
+            } |
+            Sort-Object `
+                -Property @{
+                    Expression = {
+                        ([string]$_.localPath).Length
+                    }
+                } `
+                -Descending
+    )
+
+    if ($directoryMatches.Count -gt 0) {
+        $selected = $directoryMatches[0]
+
+        return [pscustomobject]@{
+            Registry = $registry
+            Repository = $selected
+            RepositoryRoot = [string]$selected.localPath
+            Source = 'current-directory'
+        }
+    }
+
     $selected = Find-RepoFlowRepositoryByName `
         -Repositories $registry.Repositories `
         -Name $registry.DefaultRepository
@@ -443,6 +450,7 @@ function Get-RepoFlowRepositorySelection {
         Source = 'default'
     }
 }
+
 
 function Get-RepoFlowRepositoryRoot {
     [CmdletBinding()]

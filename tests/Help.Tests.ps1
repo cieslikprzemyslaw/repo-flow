@@ -19,6 +19,12 @@ Describe 'RepoFlow help' {
             $helpText | Should -Match 'pr accept'
         }
 
+        It 'shows positional repository use syntax' {
+            $helpText = Get-RepoFlowHelpText -Topic 'repo use'
+
+            $helpText |
+                Should -Match 'repo use repo-flow'
+        }
         It 'routes the help command without loading a workflow' {
             $result = Invoke-RepoFlow -Area help -Action 'issue run'
             $result | Should -Match 'Implements a GitHub issue'

@@ -10,7 +10,12 @@ Describe 'RepoFlow multi-repository selection' {
             $script:repositoryB = Join-Path $TestDrive 'repo-b'
             $script:nestedRepository = Join-Path $script:repositoryA 'nested'
             $script:configPath = Join-Path $TestDrive '.repo-flow.json'
+            $script:statePath = Join-Path $TestDrive '.repo-flow.state.json'
 
+            Remove-Item `
+                -LiteralPath $script:statePath `
+                -Force `
+                -ErrorAction SilentlyContinue
             New-Item -ItemType Directory -Path $script:repositoryA -Force | Out-Null
             New-Item -ItemType Directory -Path $script:repositoryB -Force | Out-Null
             New-Item -ItemType Directory -Path $script:nestedRepository -Force | Out-Null
@@ -92,7 +97,7 @@ Describe 'RepoFlow multi-repository selection' {
             $selection.Source | Should -Be 'explicit'
         }
 
-        It 'uses the current directory before the active and default repository' {
+        It 'uses the active repository before the current directory and default repository' {
             Write-RepoFlowActiveRepository `
                 -ConfigPath $script:configPath `
                 -RepositoryName 'repo-b' |
@@ -102,10 +107,9 @@ Describe 'RepoFlow multi-repository selection' {
                 -ConfigPath $script:configPath `
                 -CurrentDirectory $script:repositoryA
 
-            $selection.Repository.name | Should -Be 'repo-a'
-            $selection.Source | Should -Be 'current-directory'
+            $selection.Repository.name | Should -Be 'repo-b'
+            $selection.Source | Should -Be 'active'
         }
-
         It 'uses the longest matching path for nested repositories' {
             $raw = Get-Content -LiteralPath $script:configPath -Raw |
                 ConvertFrom-Json
@@ -184,7 +188,7 @@ Describe 'RepoFlow multi-repository selection' {
 
         It 'rejects invalid active state JSON' {
             Set-Content `
-                -LiteralPath (Join-Path $TestDrive '.repo-flow.state.json') `
+                -LiteralPath $script:statePath `
                 -Value '{broken' `
                 -Encoding utf8NoBOM
 
@@ -200,7 +204,7 @@ Describe 'RepoFlow multi-repository selection' {
                 -Repo 'repo-b' `
                 -ConfigPath $script:configPath
 
-            Test-Path (Join-Path $TestDrive '.repo-flow.state.json') |
+            Test-Path $script:statePath |
                 Should -BeFalse
 
             Invoke-RepoFlowRepositoryUseWorkflow `
@@ -214,14 +218,14 @@ Describe 'RepoFlow multi-repository selection' {
             Invoke-RepoFlowRepositoryResetWorkflow `
                 -ConfigPath $script:configPath
 
-            Test-Path (Join-Path $TestDrive '.repo-flow.state.json') |
+            Test-Path $script:statePath |
                 Should -BeTrue
 
             Invoke-RepoFlowRepositoryResetWorkflow `
                 -Apply `
                 -ConfigPath $script:configPath
 
-            Test-Path (Join-Path $TestDrive '.repo-flow.state.json') |
+            Test-Path $script:statePath |
                 Should -BeFalse
         }
 

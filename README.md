@@ -249,8 +249,8 @@ One configuration can register several target repositories:
 Repository selection uses this order:
 
 1. explicit `-Repo`;
-2. the registered repository containing the current directory;
-3. the repository stored by `repo use`;
+2. the repository stored by `repo use`;
+3. the registered repository containing the current directory;
 4. `defaultRepository`;
 5. the legacy `repository` object.
 
@@ -260,13 +260,15 @@ configuration file. It is ignored by Git and contains only the selected name.
 ```powershell
 repo-flow repo list
 repo-flow repo current
-repo-flow repo use -Repo repo-flow
-repo-flow repo use -Repo repo-flow -Apply
+repo-flow repo use repo-flow
+repo-flow repo use repo-flow -Apply
 repo-flow repo reset -Apply
 
 repo-flow issue run -Number 12 -Repo repo-flow -Apply
 repo-flow pr status -Number 12 -Repo repo-flow
 ```
+
+The named `-Repo` form remains supported for scripts and one-run repository overrides.
 
 Selecting a repository does not change the caller's working directory.
 RepoFlow still validates the configured path and Git remote before running a

@@ -37,6 +37,7 @@ function Invoke-RepoFlow {
         [ValidateSet('skip', 'observe', 'require-passing')]
         [string]$CiMode,
 
+        [Parameter(Position = 2)]
         [Alias('Repository', 'RepositoryName')]
         [string]$Repo,
 

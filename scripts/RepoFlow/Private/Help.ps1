@@ -288,17 +288,17 @@ RepoFlow repository commands
   .\repo-flow.ps1 repo list
   .\repo-flow.ps1 repo current
   .\repo-flow.ps1 repo current -Repo <name>
-  .\repo-flow.ps1 repo use -Repo <name>
-  .\repo-flow.ps1 repo use -Repo <name> -Apply
+  .\repo-flow.ps1 repo use <name>
+  .\repo-flow.ps1 repo use <name> -Apply
   .\repo-flow.ps1 repo reset
   .\repo-flow.ps1 repo reset -Apply
 
 Selection precedence:
-  explicit -Repo
-  current working directory
-  stored active repository
-  configured default repository
-  legacy repository configuration
+explicit -Repo
+stored active repository
+current working directory
+configured default repository
+legacy repository configuration
 '@
         }
 
@@ -334,10 +334,10 @@ Stores an active repository selection beside .repo-flow.json.
 It does not change the shell working directory.
 
 Plan:
-  .\repo-flow.ps1 repo use -Repo repo-flow
+  .\repo-flow.ps1 repo use repo-flow
 
 Apply:
-  .\repo-flow.ps1 repo use -Repo repo-flow -Apply
+  .\repo-flow.ps1 repo use repo-flow -Apply
 '@
         }
 
