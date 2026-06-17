@@ -9,6 +9,7 @@ $privateFiles = @(
     'Markdown.ps1',
     'GitHub.ps1',
     'Git.ps1',
+    'AgentRunState.ps1',
     'Issues.ps1',
     'Branches.ps1',
     'Diagnostics.ps1',

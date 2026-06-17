@@ -62,6 +62,8 @@ param(
     [ValidateRange(1, [long]::MaxValue)]
     [long]$PrCommentId,
 
+    [switch]$Resume,
+
     [ValidateSet('skip', 'observe', 'require-passing')]
     [string]$CiMode,
 

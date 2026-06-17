@@ -86,7 +86,8 @@ function Get-RepoFlowWorkingTreeChangedFiles {
     $files = [System.Collections.Generic.List[string]]::new()
     $commands = @(
         @('diff', '--name-only', '--diff-filter=ACMRTUXB'),
-        @('diff', '--cached', '--name-only', '--diff-filter=ACMRTUXB')
+        @('diff', '--cached', '--name-only', '--diff-filter=ACMRTUXB'),
+        @('ls-files', '--others', '--exclude-standard')
     )
 
     foreach ($arguments in $commands) {

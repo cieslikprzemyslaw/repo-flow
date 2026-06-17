@@ -122,6 +122,18 @@ Only comments from configured trusted GitHub associations are accepted. Bot and 
 
 Inline review-thread comments are not supported in v0.1. Use a top-level PR comment.
 
+#### Resume an interrupted review-feedback run
+
+When an agent stops after modifying files, preserve the current working tree and resume the same PR comment explicitly:
+
+```powershell
+.\repo-flow.ps1 issue continue -Number 66 -PrCommentId 123456789 -Apply -Resume
+```
+
+`-Resume` is intentionally restricted to `issue continue`. RepoFlow requires the issue branch to already be checked out, requires uncommitted changes, rejects active merge/rebase/cherry-pick/revert operations, and verifies that local `HEAD` still matches the remote branch. It does not switch branches, pull, reset, restore, or stash.
+
+Before each review-feedback agent run, RepoFlow writes a checkpoint under `.git/repo-flow/agent-run.json`. Failed runs are marked as interrupted. A first resume after upgrading can explicitly adopt existing changes even when no earlier checkpoint exists, after the branch and remote-head checks pass.
+
 ### Pull requests
 
 ```powershell

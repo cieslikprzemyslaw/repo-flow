@@ -220,6 +220,8 @@ function Invoke-RepoFlowIssueContinueWorkflow {
 
         [long]$PrCommentId,
 
+        [switch]$Resume,
+
         [switch]$Apply,
 
         [string]$CiMode,
@@ -267,11 +269,22 @@ function Invoke-RepoFlowIssueContinueWorkflow {
 
     Write-Host "Branch:  $branchName"
     Write-Host "CI mode: $effectiveCiMode"
+    Write-Host "Resume:  $([bool]$Resume)"
     Write-Host ''
 
     if (-not $Apply) {
         Write-Host 'PLAN ONLY - no changes were made.'
-        Write-Host 'Run again with -Apply to process this comment.'
+
+        if ($Resume) {
+            Write-Host (
+                'Apply mode will preserve and continue the existing dirty ' +
+                'working tree on the issue branch.'
+            )
+        }
+        else {
+            Write-Host 'Run again with -Apply to process this comment.'
+        }
+
         return
     }
 
@@ -283,14 +296,36 @@ function Invoke-RepoFlowIssueContinueWorkflow {
         return
     }
 
-    Assert-RepoFlowCleanWorkingTree -Config $config
-    $currentBranch = Get-RepoFlowCurrentBranch
+    if ($Resume) {
+        Assert-RepoFlowReviewResumeAllowed `
+            -RepositoryRoot $context.RepositoryRoot `
+            -Repository $repository `
+            -Branch $branchName `
+            -IssueNumber $Number `
+            -PullRequestNumber ([int]$pullRequest.number) `
+            -PrCommentId ([long]$comment.id) | Out-Null
 
-    if ($currentBranch -ne $branchName -and $currentBranch -ne [string]$config.repository.baseBranch) {
-        Prepare-RepoFlowBaseBranch -Config $config
+        Write-Host (
+            '[GIT] Preserving existing working-tree changes on ' +
+            "$branchName."
+        )
+    }
+    else {
+        Assert-RepoFlowCleanWorkingTree -Config $config
+        $currentBranch = Get-RepoFlowCurrentBranch
+
+        if (
+            $currentBranch -ne $branchName -and
+            $currentBranch -ne [string]$config.repository.baseBranch
+        ) {
+            Prepare-RepoFlowBaseBranch -Config $config
+        }
+
+        Switch-RepoFlowExistingBranch -Branch $branchName
+        Remove-RepoFlowAgentRunState `
+            -RepositoryRoot $context.RepositoryRoot
     }
 
-    Switch-RepoFlowExistingBranch -Branch $branchName
     $finalMessagePath = Join-Path ([System.IO.Path]::GetTempPath()) (
         'repo-flow-review-final-{0}.md' -f [guid]::NewGuid().ToString('N')
     )
@@ -300,19 +335,51 @@ function Invoke-RepoFlowIssueContinueWorkflow {
             -Issue $issue `
             -PullRequest $pullRequest `
             -Comment $comment `
-            -Config $config
+            -Config $config `
+            -ResumeInterruptedWork:$Resume
         $scopeLength = ([string]$issue.body).Length
         Write-Host "[AGENT] Scope source: issue #$($issue.number) body ($scopeLength characters) plus PR comment #$($comment.id)."
-        Write-Host '[AGENT] Applying review feedback...'
-        $result = Invoke-RepoFlowAgent `
+
+        if ($Resume) {
+            Write-Host '[AGENT] Resuming interrupted review feedback...'
+        }
+        else {
+            Write-Host '[AGENT] Applying review feedback...'
+        }
+
+        Start-RepoFlowReviewAgentRunState `
             -RepositoryRoot $context.RepositoryRoot `
-            -Prompt $prompt `
-            -FinalMessagePath $finalMessagePath `
-            -Config $config
+            -Repository $repository `
+            -Branch $branchName `
+            -IssueNumber $Number `
+            -PullRequestNumber ([int]$pullRequest.number) `
+            -PrCommentId ([long]$comment.id) `
+            -Config $config `
+            -AdoptedExistingChanges:$Resume | Out-Null
+
+        try {
+            $result = Invoke-RepoFlowAgent `
+                -RepositoryRoot $context.RepositoryRoot `
+                -Prompt $prompt `
+                -FinalMessagePath $finalMessagePath `
+                -Config $config
+        }
+        catch {
+            Set-RepoFlowAgentRunInterrupted `
+                -RepositoryRoot $context.RepositoryRoot `
+                -ErrorMessage $_.Exception.Message
+            throw
+        }
 
         if ($result.ExitCode -ne 0) {
+            Set-RepoFlowAgentRunInterrupted `
+                -RepositoryRoot $context.RepositoryRoot `
+                -ErrorMessage $result.Text
             throw "Agent failed:$([Environment]::NewLine)$($result.Text)"
         }
+
+        Remove-RepoFlowAgentRunState `
+            -RepositoryRoot $context.RepositoryRoot
 
         $summary = Get-RepoFlowAgentFinalMessage -Path $finalMessagePath
         $changes = Get-RepoFlowWorkingTreeStatus

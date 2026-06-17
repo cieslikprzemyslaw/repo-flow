@@ -34,6 +34,8 @@ function Invoke-RepoFlow {
         [ValidateRange(1, [long]::MaxValue)]
         [long]$PrCommentId,
 
+        [switch]$Resume,
+
         [ValidateSet('skip', 'observe', 'require-passing')]
         [string]$CiMode,
 
@@ -61,8 +63,13 @@ function Invoke-RepoFlow {
     }
 
     $normalisedAction = $Action.Trim().ToLowerInvariant()
+    $commandName = "$normalisedArea/$normalisedAction"
 
-    switch ("$normalisedArea/$normalisedAction") {
+    if ($Resume -and $commandName -ne 'issue/continue') {
+        throw '-Resume is supported only by issue continue.'
+    }
+
+    switch ($commandName) {
         'issue/sync' {
             Invoke-RepoFlowIssueSyncWorkflow `
                 -Apply:$Apply `
@@ -113,6 +120,7 @@ function Invoke-RepoFlow {
                 -Number $Number `
                 -LastPrComment:$LastPrComment `
                 -PrCommentId $PrCommentId `
+                -Resume:$Resume `
                 -Apply:$Apply `
                 -CiMode $CiMode `
                 -Repo $Repo `

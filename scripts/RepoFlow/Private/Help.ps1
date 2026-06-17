@@ -111,6 +111,7 @@ RepoFlow issue commands
 
   .\repo-flow.ps1 issue continue -Number <issue> -PrCommentId <id>
   .\repo-flow.ps1 issue continue -Number <issue> -PrCommentId <id> -Apply
+  .\repo-flow.ps1 issue continue -Number <issue> -PrCommentId <id> -Apply -Resume
 '@
         }
 
@@ -160,6 +161,13 @@ Latest PR comment:
 
 Specific PR comment:
   .\repo-flow.ps1 issue continue -Number 66 -PrCommentId 123456789 -Apply
+
+Resume an interrupted agent run while preserving existing changes:
+  .\repo-flow.ps1 issue continue -Number 66 -PrCommentId 123456789 -Apply -Resume
+
+-Resume requires the issue branch to be checked out, a dirty working tree,
+and local HEAD to match the remote branch. It never switches branches,
+resets, restores, or stashes existing work.
 
 Use either -LastPrComment or -PrCommentId, not both.
 '@
