@@ -9,7 +9,7 @@ Describe 'RepoFlow help' {
             $helpText = Get-RepoFlowHelpText
             $helpText | Should -Match 'issue run'
             $helpText | Should -Match 'pr merge'
-            $helpText | Should -Not -Match 'pr preview'
+            $helpText | Should -Match 'pr repair'
         }
 
         It 'shows command-specific merge help' {
@@ -17,6 +17,12 @@ Describe 'RepoFlow help' {
             $helpText | Should -Match 'manually review'
             $helpText | Should -Match 'type MERGE'
             $helpText | Should -Match 'pr accept'
+        }
+
+        It 'shows command-specific repair help' {
+            $helpText = Get-RepoFlowHelpText -Topic 'pr repair'
+            $helpText | Should -Match 'Repairs a failed, open pull request'
+            $helpText | Should -Match 'plan-only by default'
         }
 
         It 'shows positional repository use syntax' {

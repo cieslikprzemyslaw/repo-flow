@@ -50,7 +50,7 @@ Describe 'RepoFlow CLI parser' {
         $areaHelp | Should -Match 'RepoFlow issue commands'
         $actionHelp | Should -Match 'Implements a GitHub issue'
         $futureRepairHelp | Should -Match 'pr repair'
-        $futureRepairHelp | Should -Match 'not implemented'
+        $futureRepairHelp | Should -Match 'Repairs a failed, open pull request'
     }
 
     It 'prints the module version without loading configuration' {

@@ -51,6 +51,9 @@ Commands:
       After manual review, explicitly confirm and merge the pull request.
       'pr accept' is an alias for this command.
 
+  pr repair
+      Repair a failed open pull request without merging it.
+
   branch cleanup
       Find or delete safely merged local branches.
 
@@ -190,9 +193,6 @@ RepoFlow pull-request commands
   rf pr merge -Number <pr> -Apply
   rf pr repair --help
 
-pr repair is reserved for the explicit CI-repair workflow. The executable
-command is not implemented yet and will be delivered by a later issue.
-
 pr accept is an alias for pr merge.
 '@
         }
@@ -262,13 +262,13 @@ No issue, agent, or CI workflow invokes this command automatically.
             return @'
 pr repair
 
-Displays help for the planned explicit CI-repair workflow.
+Repairs a failed, open pull request using the configured coding agent.
 
 Usage:
   rf pr repair -Number <pr> -Apply
 
-This command is reserved but not implemented in this version. A later issue
-will add the bounded repair workflow without changing this help route.
+The command is plan-only by default. Add -Apply to run one bounded repair
+cycle and observe the repaired PR checks.
 '@
         }
 

@@ -17,7 +17,9 @@ function Write-RepoFlowFailedCiContext {
         [string]$BaseBranch,
 
         [Parameter(Mandatory)]
-        [string]$OutputPath
+        [string]$OutputPath,
+
+        [switch]$PassThru
     )
 
     $failedChecks = @(
@@ -34,6 +36,7 @@ function Write-RepoFlowFailedCiContext {
         4000,
         [Math]::Floor($rawBudgetPerCheck / 2)
     )
+    $allDiagnostics = [System.Collections.Generic.List[object]]::new()
 
     $content = [System.Collections.Generic.List[string]]::new()
     $content.Add('# Failed CI checks')
@@ -91,6 +94,7 @@ function Write-RepoFlowFailedCiContext {
                 -MaximumRawCharacters ([Math]::Min(4000, $rawBudgetPerCheck)) `
                 -HeadCharacters ([Math]::Min(2000, $rawHeadPerCheck))
         )
+        $allDiagnostics.AddRange(@($diagnostics))
 
         if ($diagnostics.Count -gt 0) {
             $content.Add('### Structured diagnostics')
@@ -165,4 +169,12 @@ function Write-RepoFlowFailedCiContext {
         -LiteralPath $OutputPath `
         -Value $content `
         -Encoding utf8
+
+    if ($PassThru) {
+        return [pscustomobject]@{
+            OutputPath = $OutputPath
+            FailedChecks = @($failedChecks)
+            Diagnostics = @($allDiagnostics)
+        }
+    }
 }

@@ -135,3 +135,29 @@ function Format-RepoFlowChangedFiles {
         ForEach-Object { "- $_" }
     ) -join [Environment]::NewLine
 }
+
+function Get-RepoFlowPullRequestDiffStat {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$BaseBranch
+    )
+
+    $result = Invoke-RepoFlowCommand `
+        -Command 'git' `
+        -Arguments @(
+            'diff',
+            '--stat',
+            "origin/$BaseBranch...HEAD"
+        ) `
+        -AllowFailure
+
+    if ([string]::IsNullOrWhiteSpace($result.Text)) {
+        return ''
+    }
+
+    return Get-RepoFlowBoundedText `
+        -Text $result.Text `
+        -MaximumCharacters 8000 `
+        -HeadCharacters 3000
+}
