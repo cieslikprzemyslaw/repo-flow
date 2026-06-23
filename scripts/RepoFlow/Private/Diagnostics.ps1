@@ -161,3 +161,29 @@ function Get-RepoFlowPullRequestDiffStat {
         -MaximumCharacters 8000 `
         -HeadCharacters 3000
 }
+
+function Get-RepoFlowPullRequestDiff {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$BaseBranch
+    )
+
+    $result = Invoke-RepoFlowCommand `
+        -Command 'git' `
+        -Arguments @(
+            'diff',
+            '--no-ext-diff',
+            "origin/$BaseBranch...HEAD"
+        ) `
+        -AllowFailure
+
+    if ([string]::IsNullOrWhiteSpace($result.Text)) {
+        return ''
+    }
+
+    return Get-RepoFlowBoundedText `
+        -Text $result.Text `
+        -MaximumCharacters 12000 `
+        -HeadCharacters 5000
+}

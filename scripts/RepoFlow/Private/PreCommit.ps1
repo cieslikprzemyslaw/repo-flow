@@ -211,7 +211,9 @@ function Complete-RepoFlowCommit {
         [string]$RepositoryRoot,
 
         [Parameter(Mandatory)]
-        $Config
+        $Config,
+
+        [scriptblock]$BeforeRetryCommit
     )
 
     $commitResult = Invoke-RepoFlowCommitAttempt `
@@ -259,6 +261,10 @@ function Complete-RepoFlowCommit {
                 "Automatic pre-commit fix attempt $attempt failed. " +
                 'All working-tree changes were preserved.'
             )
+        }
+
+        if ($null -ne $BeforeRetryCommit) {
+            & $BeforeRetryCommit
         }
 
         Write-Host '[GIT] Retrying commit...'

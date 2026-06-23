@@ -46,6 +46,29 @@ Describe 'RepoFlow changed-file diagnostics' {
             $files | Should -Contain 'src/b.ts'
         }
 
+        It 'returns the bounded pull-request diff text' {
+            Mock Invoke-RepoFlowCommand {
+                [pscustomobject]@{
+                    ExitCode = 0
+                    Text = @"
+diff --git a/src/a.ts b/src/a.ts
+index 1234567..89abcde 100644
+--- a/src/a.ts
++++ b/src/a.ts
+@@ -1 +1 @@
+-old
++new
+"@
+                }
+            }
+
+            $diff = Get-RepoFlowPullRequestDiff -BaseBranch 'master'
+
+            $diff | Should -Match 'diff --git a/src/a.ts b/src/a.ts'
+            $diff | Should -Match '@@ -1 \+1 @@'
+            $diff | Should -Not -Match 'src/a.ts \|'
+        }
+
         It 'formats an empty changed-file list clearly' {
             Format-RepoFlowChangedFiles -Files @() |
                 Should -Be '- No changed files were reported.'
