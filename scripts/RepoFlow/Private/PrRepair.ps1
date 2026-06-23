@@ -176,11 +176,6 @@ function Invoke-RepoFlowPrRepairWorkflow {
 
         try {
             for ($attempt = 1; $attempt -le $attemptLimit; $attempt++) {
-                $livePullRequest = Assert-RepoFlowPrRepairLiveHead `
-                    -Number $Number `
-                    -Repository $repository `
-                    -ExpectedHeadSha $expectedHeadSha
-
                 $changedFiles = Get-RepoFlowPullRequestChangedFiles `
                     -BaseBranch ([string]$config.repository.baseBranch)
                 $currentDiff = Get-RepoFlowPullRequestDiff `
@@ -198,7 +193,7 @@ function Invoke-RepoFlowPrRepairWorkflow {
 
                 $prompt = New-RepoFlowPrRepairPrompt `
                     -Issue $issue `
-                    -PullRequest $livePullRequest `
+                    -PullRequest $pullRequest `
                     -HeadSha $expectedHeadSha `
                     -ContextPath $repairContextPath `
                     -CurrentDiff $currentDiff `
