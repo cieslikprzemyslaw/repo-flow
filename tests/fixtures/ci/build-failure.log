@@ -1,0 +1,5 @@
+Run npm run build
+vite v7.0.0 building for production...
+error during build:
+Could not resolve "./missing-module" from "src/app.ts"
+Process completed with exit code 1.

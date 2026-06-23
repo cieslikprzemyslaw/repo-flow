@@ -1,0 +1,5 @@
+Run npm run format
+Checking formatting...
+src/app.ts
+Code style issues found in the above file.
+Process completed with exit code 1.

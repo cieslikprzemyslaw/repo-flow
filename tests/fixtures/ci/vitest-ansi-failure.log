@@ -1,0 +1,8 @@
+[31mFAIL[0m src/utils/date.test.ts > formatDate > rejects invalid input
+[31mAssertionError:[0m expected true to be false
+
+Expected: false
+Received: true
+
+ at src/utils/date.test.ts:19:12
+Tests 1 failed (1)

@@ -1,0 +1,26 @@
+Run npm test
+
+> app@1.0.0 test
+> vitest run
+
+FAIL src/components/loginForm/loginForm.test.tsx > LoginForm > shows validation error
+AssertionError: expected "Email is required" to be "Enter an email address"
+
+Expected: "Enter an email address"
+Received: "Email is required"
+
+ at src/components/loginForm/loginForm.test.tsx:42:18
+ at processTicksAndRejections (node/process/task_queues:95:5)
+
+Test Files 1 failed (1)
+Tests 1 failed (1)
+Process completed with exit code 1.
+
+Run npm run build
+
+> app@1.0.0 build
+> vite build
+
+Error during build
+Could not resolve "./missing-module" from "src/main.ts"
+Process completed with exit code 1.
