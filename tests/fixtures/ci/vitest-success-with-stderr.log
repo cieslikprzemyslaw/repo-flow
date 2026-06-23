@@ -1,0 +1,14 @@
+Run npm test
+
+> app@1.0.0 test
+> vitest run
+
+stderr | src/services/logger.test.ts > logs backend errors
+Error: simulated backend failure
+ at src/services/logger.test.ts:22:9
+
+PASS src/services/logger.test.ts > logs backend errors
+
+Test Files 1 passed (1)
+Tests 1 passed (1)
+Process completed with exit code 0.

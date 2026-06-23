@@ -74,9 +74,60 @@ Describe 'RepoFlow CI state handling' {
 }
 
 Describe 'RepoFlow CI diagnostics' {
+    BeforeAll {
+        $env:REPO_FLOW_CI_FIXTURE_DIRECTORY = Join-Path $PSScriptRoot 'fixtures/ci'
+    }
+
+    AfterAll {
+        Remove-Item Env:REPO_FLOW_CI_FIXTURE_DIRECTORY -ErrorAction SilentlyContinue
+    }
+
     InModuleScope RepoFlow {
-        It 'keeps the beginning and end of failed logs and lists PR files' {
+        It 'writes structured human and machine-readable diagnostics' {
             $outputPath = Join-Path $TestDrive 'ci-context.md'
+            $logText = [System.IO.File]::ReadAllText(
+                (Join-Path $env:REPO_FLOW_CI_FIXTURE_DIRECTORY 'vitest-multiple-failures.log')
+            )
+            $checks = @(
+                [pscustomobject]@{
+                    name = 'Validate'
+                    bucket = 'fail'
+                    link = 'https://github.com/owner/repository/actions/runs/12345'
+                }
+            )
+
+            Mock Get-RepoFlowPullRequestChangedFiles {
+                @('src/app/page.tsx', 'src/app/page.test.tsx')
+            }
+            Mock Invoke-RepoFlowCommand {
+                [pscustomobject]@{
+                    ExitCode = 1
+                    Text = $logText
+                }
+            }
+
+            Write-RepoFlowFailedCiContext `
+                -IssueNumber 22 `
+                -PullRequestNumber 121 `
+                -Checks $checks `
+                -Repository 'owner/repository' `
+                -BaseBranch 'master' `
+                -OutputPath $outputPath
+
+            $context = Get-Content -LiteralPath $outputPath -Raw
+
+            $context | Should -Match '### Structured diagnostics'
+            $context | Should -Match '\[test\] LoginForm > shows validation error'
+            $context | Should -Match 'loginForm\.test\.tsx:42'
+            $context | Should -Match 'authenticate > rejects an expired token'
+            $context | Should -Match 'auth\.service\.test\.ts:87'
+            $context | Should -Match '### Machine-readable diagnostics'
+            $context | Should -Match '"Category":\s*"test"'
+            $context | Should -Match '"TestFile":\s*"src/components/loginForm/loginForm\.test\.tsx"'
+        }
+
+        It 'keeps bounded raw fallback for unknown failed output' {
+            $outputPath = Join-Path $TestDrive 'ci-context-unknown.md'
             $longLog = ('HEAD' + ('A' * 16000) + ('B' * 16000) + 'TAIL')
             $checks = @(
                 [pscustomobject]@{
@@ -91,7 +142,7 @@ Describe 'RepoFlow CI diagnostics' {
             }
             Mock Invoke-RepoFlowCommand {
                 [pscustomobject]@{
-                    ExitCode = 0
+                    ExitCode = 1
                     Text = $longLog
                 }
             }

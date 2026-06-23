@@ -1,0 +1,25 @@
+Run npm test
+
+> app@1.0.0 test
+> vitest run
+
+FAIL src/components/loginForm/loginForm.test.tsx > LoginForm > shows validation error
+AssertionError: expected "Email is required" to be "Enter an email address"
+
+Expected: "Enter an email address"
+Received: "Email is required"
+
+ at src/components/loginForm/loginForm.test.tsx:42:18
+ at processTicksAndRejections (node/process/task_queues:95:5)
+
+FAIL src/services/auth/auth.service.test.ts > authenticate > rejects an expired token
+Error: expected status 401 but received 500
+
+Expected: 401
+Received: 500
+
+ at src/services/auth/auth.service.test.ts:87:24
+ at processTicksAndRejections (node/process/task_queues:95:5)
+
+Test Files 2 failed (2)
+Tests 2 failed (2)

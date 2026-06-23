@@ -21,3 +21,4 @@ test-results/
 Thumbs.db
 .vscode/*.log
 .repo-flow.state.json
+!tests/fixtures/ci/*.log
