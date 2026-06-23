@@ -242,5 +242,159 @@ Describe 'RepoFlow persisted run state' {
             $updated.currentPhase | Should -Be 'agent-running'
             $updated.lastSafePhase | Should -Be 'branch-created'
         }
+
+        It 'rejects invalid timestamps before repository state is used' {
+            $record = Start-RepoFlowRunRecord `
+                -ConfigPath $script:configPath `
+                -RepositoryRoot $script:repositoryA `
+                -Repository 'repo-a' `
+                -RepositorySlug 'owner/repo-a' `
+                -Operation 'issue-run' `
+                -IssueNumber 4 `
+                -Branch 'issue/4-state' `
+                -BaseSha ('a' * 40) `
+                -HeadSha ('a' * 40) `
+                -Phase 'branch-created' `
+                -Provider 'codex' `
+                -Model 'gpt-5.5'
+
+            $state = Get-Content -LiteralPath $script:statePath -Raw |
+                ConvertFrom-Json
+            $state.runs[0].updatedAtUtc = 'not-a-timestamp'
+            $state |
+                ConvertTo-Json -Depth 20 |
+                Set-Content -LiteralPath $script:statePath -Encoding utf8NoBOM
+
+            {
+                Read-RepoFlowRepositoryState -ConfigPath $script:configPath
+            } | Should -Throw '*invalid or incompatible run record*'
+        }
+
+        It 'rejects inconsistent completed run records' {
+            $record = Start-RepoFlowRunRecord `
+                -ConfigPath $script:configPath `
+                -RepositoryRoot $script:repositoryA `
+                -Repository 'repo-a' `
+                -RepositorySlug 'owner/repo-a' `
+                -Operation 'issue-run' `
+                -IssueNumber 4 `
+                -Branch 'issue/4-state' `
+                -BaseSha ('a' * 40) `
+                -HeadSha ('a' * 40) `
+                -Phase 'branch-created' `
+                -Provider 'codex' `
+                -Model 'gpt-5.5'
+
+            $state = Get-Content -LiteralPath $script:statePath -Raw |
+                ConvertFrom-Json
+            $state.runs[0].status = 'completed'
+            $state |
+                ConvertTo-Json -Depth 20 |
+                Set-Content -LiteralPath $script:statePath -Encoding utf8NoBOM
+
+            {
+                Get-RepoFlowRunRecords -ConfigPath $script:configPath
+            } | Should -Throw '*invalid or incompatible run record*'
+        }
+
+        It 'clears stale CI identifiers when empty arrays are explicitly checkpointed' {
+            $record = Start-RepoFlowRunRecord `
+                -ConfigPath $script:configPath `
+                -RepositoryRoot $script:repositoryA `
+                -Repository 'repo-a' `
+                -RepositorySlug 'owner/repo-a' `
+                -Operation 'issue-run' `
+                -IssueNumber 4 `
+                -Branch 'issue/4-state' `
+                -BaseSha ('a' * 40) `
+                -HeadSha ('a' * 40) `
+                -Phase 'branch-created' `
+                -Provider 'codex' `
+                -Model 'gpt-5.5'
+
+            Set-RepoFlowRunCheckpoint `
+                -ConfigPath $script:configPath `
+                -RunId ([string]$record.runId) `
+                -CurrentPhase 'ci-failed' `
+                -CiRunIds @('300') `
+                -CiJobIds @('900')
+
+            Set-RepoFlowRunCheckpoint `
+                -ConfigPath $script:configPath `
+                -RunId ([string]$record.runId) `
+                -CurrentPhase 'ci-pending' `
+                -CiRunIds @() `
+                -CiJobIds @()
+
+            $updated = Get-RepoFlowRunRecord `
+                -ConfigPath $script:configPath `
+                -RunId ([string]$record.runId)
+
+            @($updated.ciRunIds).Count | Should -Be 0
+            @($updated.ciJobIds).Count | Should -Be 0
+        }
+
+        It 'stores a bounded safe pause reason instead of raw output' {
+            $record = Start-RepoFlowRunRecord `
+                -ConfigPath $script:configPath `
+                -RepositoryRoot $script:repositoryA `
+                -Repository 'repo-a' `
+                -RepositorySlug 'owner/repo-a' `
+                -Operation 'issue-run' `
+                -IssueNumber 4 `
+                -Branch 'issue/4-state' `
+                -BaseSha ('a' * 40) `
+                -HeadSha ('a' * 40) `
+                -Phase 'issue-agent-running' `
+                -Provider 'codex' `
+                -Model 'gpt-5.5'
+
+            Set-RepoFlowRunPaused `
+                -ConfigPath $script:configPath `
+                -RunId ([string]$record.runId) `
+                -PauseReason "Agent failed: token=super-secret`nWrite-Host evil"
+
+            $updated = Get-RepoFlowRunRecord `
+                -ConfigPath $script:configPath `
+                -RunId ([string]$record.runId)
+
+            $updated.pauseReason | Should -Match 'coding-agent failure'
+            $updated.pauseReason | Should -Not -Match 'super-secret'
+            $updated.pauseReason | Should -Not -Match 'Write-Host'
+            $updated.pauseReason.Length | Should -BeLessThan 300
+        }
+
+        It 'keeps run records when active repository selection is reset' {
+            $record = Start-RepoFlowRunRecord `
+                -ConfigPath $script:configPath `
+                -RepositoryRoot $script:repositoryA `
+                -Repository 'repo-a' `
+                -RepositorySlug 'owner/repo-a' `
+                -Operation 'issue-run' `
+                -IssueNumber 4 `
+                -Branch 'issue/4-state' `
+                -BaseSha ('a' * 40) `
+                -HeadSha ('a' * 40) `
+                -Phase 'branch-created' `
+                -Provider 'codex' `
+                -Model 'gpt-5.5'
+
+            Write-RepoFlowActiveRepository `
+                -ConfigPath $script:configPath `
+                -RepositoryName 'repo-a' |
+                Out-Null
+
+            Remove-RepoFlowActiveRepository `
+                -ConfigPath $script:configPath |
+                Out-Null
+
+            Test-Path -LiteralPath $script:statePath | Should -BeTrue
+            (Read-RepoFlowRepositoryState -ConfigPath $script:configPath) |
+                Should -BeNullOrEmpty
+
+            $runs = Get-RepoFlowRunRecords -ConfigPath $script:configPath
+            $runs.Count | Should -Be 1
+            $runs[0].runId | Should -Be $record.runId
+        }
     }
 }

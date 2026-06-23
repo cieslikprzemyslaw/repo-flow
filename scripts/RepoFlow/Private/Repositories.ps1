@@ -197,6 +197,22 @@ function Read-RepoFlowStateDocument {
         -Value $runs `
         -Path '$.runs'
 
+    try {
+        $runRecords = @($runs)
+
+        for ($index = 0; $index -lt $runRecords.Count; $index++) {
+            Assert-RepoFlowRunRecord `
+                -Record $runRecords[$index] `
+                -Path ("$.runs[{0}]" -f $index)
+        }
+    }
+    catch {
+        throw (
+            'RepoFlow state contains an invalid or incompatible run record. ' +
+            "Move or delete the file and retry: $statePath"
+        )
+    }
+
     return New-RepoFlowStateDocument `
         -ActiveRepository $activeRepository `
         -Runs @($runs)
@@ -266,6 +282,42 @@ function Invoke-RepoFlowStateMutation {
             -Document $updatedDocument
 
         return $updatedDocument
+    }
+    finally {
+        if ($null -ne $lock) {
+            $lock.Dispose()
+        }
+    }
+}
+
+function Remove-RepoFlowStateFileIfEmpty {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ConfigPath
+    )
+
+    $statePath = Get-RepoFlowStatePath -ConfigPath $ConfigPath
+
+    if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
+        return $false
+    }
+
+    $lock = Open-RepoFlowStateLock -StatePath $statePath
+
+    try {
+        $document = Read-RepoFlowStateDocument -ConfigPath $ConfigPath
+
+        if (
+            $null -ne $document -and
+            [string]::IsNullOrWhiteSpace([string]$document.activeRepository) -and
+            @($document.runs).Count -eq 0
+        ) {
+            Remove-Item -LiteralPath $statePath -Force
+            return $true
+        }
+
+        return $false
     }
     finally {
         if ($null -ne $lock) {
@@ -748,9 +800,7 @@ function Remove-RepoFlowActiveRepository {
         return $state
     }
 
-    if (@($document.runs).Count -eq 0) {
-        Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue
-    }
+    Remove-RepoFlowStateFileIfEmpty -ConfigPath $ConfigPath | Out-Null
 
     return $true
 }

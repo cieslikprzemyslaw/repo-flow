@@ -155,6 +155,11 @@ function Set-RepoFlowRunCheckpoint {
         [int]$RepairAttemptCount = -1
     )
 
+    $replaceCiRunIds = $PSBoundParameters.ContainsKey('CiRunIds')
+    $replaceCiJobIds = $PSBoundParameters.ContainsKey('CiJobIds')
+    $effectiveCiRunIds = @($CiRunIds)
+    $effectiveCiJobIds = @($CiJobIds)
+
     Invoke-RepoFlowStateMutation -ConfigPath $ConfigPath -Update {
         param($document)
 
@@ -195,12 +200,12 @@ function Set-RepoFlowRunCheckpoint {
                     $record.repairAttemptCount = $RepairAttemptCount
                 }
 
-                if (@($CiRunIds).Count -gt 0) {
-                    $record.ciRunIds = @($CiRunIds)
+                if ($replaceCiRunIds) {
+                    $record.ciRunIds = @($effectiveCiRunIds)
                 }
 
-                if (@($CiJobIds).Count -gt 0) {
-                    $record.ciJobIds = @($CiJobIds)
+                if ($replaceCiJobIds) {
+                    $record.ciJobIds = @($effectiveCiJobIds)
                 }
 
                 $record.pauseReason = $null
@@ -251,10 +256,10 @@ function Set-RepoFlowRunPaused {
                 if (-not [string]::IsNullOrWhiteSpace($CurrentPhase)) {
                     $record.currentPhase = $CurrentPhase
                 }
-                $record.pauseReason = Get-RepoFlowBoundedText `
-                    -Text $PauseReason `
-                    -MaximumCharacters 4000 `
-                    -HeadCharacters 1000
+                $effectivePhase = [string]$record.currentPhase
+                $record.pauseReason = New-RepoFlowSafePauseReason `
+                    -Reason $PauseReason `
+                    -Phase $effectivePhase
                 $record.updatedAtUtc = New-RepoFlowRunTimestamp
                 $updated = $true
                 break
@@ -327,12 +332,9 @@ function Prune-RepoFlowRunRecords {
         [string]$Repository = $null
     )
 
-    $removed = @(
-        Get-RepoFlowRunRecords -ConfigPath $ConfigPath -Repository $Repository |
-        Where-Object {
-            -not [string]::IsNullOrWhiteSpace([string]$_.terminalOutcome)
-        }
-    ).Count
+    $result = [pscustomobject]@{
+        Removed = 0
+    }
 
     Invoke-RepoFlowStateMutation -ConfigPath $ConfigPath -Update {
         param($document)
@@ -348,10 +350,12 @@ function Prune-RepoFlowRunRecords {
                     [System.StringComparison]::OrdinalIgnoreCase
                 )
             )
-            $isTerminal = -not [string]::IsNullOrWhiteSpace([string]$record.terminalOutcome)
+            $isTerminal = -not [string]::IsNullOrWhiteSpace(
+                [string]$record.terminalOutcome
+            )
 
             if ($isRepositoryMatch -and $isTerminal) {
-                $removed++
+                $result.Removed++
                 continue
             }
 
@@ -362,18 +366,7 @@ function Prune-RepoFlowRunRecords {
         return $document
     } | Out-Null
 
-    $statePath = Get-RepoFlowStatePath -ConfigPath $ConfigPath
-    $document = Read-RepoFlowStateDocument -ConfigPath $ConfigPath
+    Remove-RepoFlowStateFileIfEmpty -ConfigPath $ConfigPath | Out-Null
 
-    if (
-        $removed -gt 0 -and
-        $null -ne $document -and
-        [string]::IsNullOrWhiteSpace([string]$document.activeRepository) -and
-        @($document.runs).Count -eq 0
-    ) {
-        Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue
-    }
-
-    return $removed
+    return [int]$result.Removed
 }
-

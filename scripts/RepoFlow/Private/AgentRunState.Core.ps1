@@ -101,7 +101,7 @@ function Assert-RepoFlowTimestampField {
             return
         }
 
-        throw "Configuration value '$Path' must be a non-empty string."
+        throw "RepoFlow state value '$Path' must contain a valid timestamp."
     }
 
     if ($Value -is [datetime] -or $Value -is [datetimeoffset]) {
@@ -109,6 +109,53 @@ function Assert-RepoFlowTimestampField {
     }
 
     Assert-RepoFlowString -Value $Value -Path $Path
+
+    $parsed = [DateTimeOffset]::MinValue
+    $styles = [System.Globalization.DateTimeStyles]::RoundtripKind
+    $culture = [System.Globalization.CultureInfo]::InvariantCulture
+
+    if (
+        -not [DateTimeOffset]::TryParse(
+            [string]$Value,
+            $culture,
+            $styles,
+            [ref]$parsed
+        )
+    ) {
+        throw "RepoFlow state value '$Path' must contain a valid timestamp."
+    }
+}
+
+function New-RepoFlowSafePauseReason {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Reason,
+
+        [Parameter(Mandatory)]
+        [string]$Phase
+    )
+
+    $category = 'workflow'
+
+    if ($Reason -match '(?i)\bagent\b|\bcodex\b|\bclaude\b') {
+        $category = 'coding-agent'
+    }
+    elseif ($Reason -match '(?i)\bCI\b|\bcheck(s)?\b') {
+        $category = 'CI'
+    }
+    elseif ($Reason -match '(?i)\bvalidation\b|\btest(s)?\b|\blint\b|\btypecheck\b') {
+        $category = 'local-validation'
+    }
+    elseif ($Reason -match '(?i)\bcommit\b|\bpush\b|\bbranch\b|\bpull request\b|\bGitHub\b') {
+        $category = 'Git-or-GitHub'
+    }
+
+    return (
+        "RepoFlow paused during phase '$Phase' after a $category failure. " +
+        'Inspect the console output and local repository state before resuming.'
+    )
 }
 
 function Assert-RepoFlowRunRecord {
@@ -181,19 +228,28 @@ function Assert-RepoFlowRunRecord {
     }
 
     Assert-RepoFlowTimestampField `
-        -Value $Record.completedAtUtc `
+        -Value (Get-RepoFlowProperty -Object $Record -Name 'completedAtUtc' -Default $null) `
         -Path "$Path.completedAtUtc" `
         -AllowNull
 
-    if ($null -ne $Record.terminalOutcome) {
+    $terminalOutcome = Get-RepoFlowProperty `
+        -Object $Record `
+        -Name 'terminalOutcome' `
+        -Default $null
+    $pauseReason = Get-RepoFlowProperty `
+        -Object $Record `
+        -Name 'pauseReason' `
+        -Default $null
+
+    if ($null -ne $terminalOutcome) {
         Assert-RepoFlowString `
-            -Value $Record.terminalOutcome `
+            -Value $terminalOutcome `
             -Path "$Path.terminalOutcome"
     }
 
-    if ($null -ne $Record.pauseReason) {
+    if ($null -ne $pauseReason) {
         Assert-RepoFlowString `
-            -Value $Record.pauseReason `
+            -Value $pauseReason `
             -Path "$Path.pauseReason"
     }
 
@@ -202,37 +258,111 @@ function Assert-RepoFlowRunRecord {
 
     foreach ($value in @($Record.ciRunIds + $Record.ciJobIds)) {
         Assert-RepoFlowString -Value $value -Path "$Path.ciIdentifiers[]"
+
+        if ([string]$value -notmatch '^\d+$') {
+            throw "RepoFlow state run record is invalid at '$Path.ciIdentifiers[]'."
+        }
     }
 
-    if ([int]$Record.issueNumber -le 0) {
+    $issueNumber = 0
+    if (
+        -not [int]::TryParse(
+            [string]$Record.issueNumber,
+            [ref]$issueNumber
+        ) -or
+        $issueNumber -le 0
+    ) {
         throw "RepoFlow state run record is invalid at '$Path.issueNumber'."
     }
 
-    if ([string]$Record.status -notin @('running', 'paused', 'completed')) {
+    $status = [string]$Record.status
+
+    if ($status -notin @('running', 'paused', 'completed')) {
         throw "RepoFlow state run record is invalid at '$Path.status'."
     }
 
-    if ($null -ne $Record.pullRequestNumber -and [int]$Record.pullRequestNumber -le 0) {
-        throw "RepoFlow state run record is invalid at '$Path.pullRequestNumber'."
+    if ($null -ne $Record.pullRequestNumber) {
+        $pullRequestNumber = 0
+
+        if (
+            -not [int]::TryParse(
+                [string]$Record.pullRequestNumber,
+                [ref]$pullRequestNumber
+            ) -or
+            $pullRequestNumber -le 0
+        ) {
+            throw "RepoFlow state run record is invalid at '$Path.pullRequestNumber'."
+        }
     }
 
-    if ($null -ne $Record.prCommentId -and [string]::IsNullOrWhiteSpace([string]$Record.prCommentId)) {
-        throw "RepoFlow state run record is invalid at '$Path.prCommentId'."
+    if ($null -ne $Record.prCommentId) {
+        Assert-RepoFlowString `
+            -Value $Record.prCommentId `
+            -Path "$Path.prCommentId"
+
+        if ([string]$Record.prCommentId -notmatch '^\d+$') {
+            throw "RepoFlow state run record is invalid at '$Path.prCommentId'."
+        }
+    }
+
+    foreach ($shaProperty in @('baseSha', 'headSha')) {
+        $shaValue = [string]$Record.$shaProperty
+
+        if ($shaValue -notmatch '^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$') {
+            throw "RepoFlow state run record is invalid at '$Path.$shaProperty'."
+        }
     }
 
     if (
-        $null -ne $Record.terminalOutcome -and
-        [string]$Record.terminalOutcome -notin @('completed', 'abandoned')
+        $null -ne $terminalOutcome -and
+        [string]$terminalOutcome -notin @('completed', 'abandoned')
     ) {
         throw "RepoFlow state run record is invalid at '$Path.terminalOutcome'."
     }
 
-    if ([int]$Record.reviewAttemptCount -lt 0) {
-        throw "RepoFlow state run record is invalid at '$Path.reviewAttemptCount'."
+    foreach ($attemptProperty in @(
+        'reviewAttemptCount',
+        'repairAttemptCount'
+    )) {
+        $attemptCount = -1
+
+        if (
+            -not [int]::TryParse(
+                [string]$Record.$attemptProperty,
+                [ref]$attemptCount
+            ) -or
+            $attemptCount -lt 0
+        ) {
+            throw "RepoFlow state run record is invalid at '$Path.$attemptProperty'."
+        }
     }
 
-    if ([int]$Record.repairAttemptCount -lt 0) {
-        throw "RepoFlow state run record is invalid at '$Path.repairAttemptCount'."
+    $hasCompletedAt = $null -ne $Record.completedAtUtc
+    $hasTerminalOutcome = -not [string]::IsNullOrWhiteSpace(
+        [string]$terminalOutcome
+    )
+    $hasPauseReason = -not [string]::IsNullOrWhiteSpace(
+        [string]$pauseReason
+    )
+
+    switch ($status) {
+        'running' {
+            if ($hasCompletedAt -or $hasTerminalOutcome -or $hasPauseReason) {
+                throw "RepoFlow state run record has inconsistent running state at '$Path'."
+            }
+        }
+
+        'paused' {
+            if ($hasCompletedAt -or $hasTerminalOutcome -or -not $hasPauseReason) {
+                throw "RepoFlow state run record has inconsistent paused state at '$Path'."
+            }
+        }
+
+        'completed' {
+            if (-not $hasCompletedAt -or -not $hasTerminalOutcome -or $hasPauseReason) {
+                throw "RepoFlow state run record has inconsistent completed state at '$Path'."
+            }
+        }
     }
 }
 
