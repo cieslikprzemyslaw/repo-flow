@@ -156,6 +156,8 @@ function Invoke-RepoFlowCli {
     }
 
     $valueOptions = @{
+        'area' = 'Area'
+        'action' = 'Action'
         'number' = 'Number'
         'issuenumber' = 'Number'
         'prnumber' = 'Number'
@@ -309,7 +311,52 @@ function Invoke-RepoFlowCli {
         repo = @('list', 'current', 'use', 'reset')
     }
 
+    if ($invokeParameters.ContainsKey('Area')) {
+        $area = ([string]$invokeParameters['Area']).Trim().ToLowerInvariant()
+
+        if (-not $validActions.ContainsKey($area)) {
+            throw (
+                New-RepoFlowCliUsageException `
+                    -Message "Unknown RepoFlow area: '$area'." `
+                    -Topic $null
+            )
+        }
+
+        $invokeParameters['Area'] = $area
+    }
+
+    if ($invokeParameters.ContainsKey('Action')) {
+        if (-not $invokeParameters.ContainsKey('Area')) {
+            throw (
+                New-RepoFlowCliUsageException `
+                    -Message '-Action requires -Area.' `
+                    -Topic $null
+            )
+        }
+
+        $action = ([string]$invokeParameters['Action']).Trim().ToLowerInvariant()
+        $area = [string]$invokeParameters['Area']
+
+        if ($action -notin $validActions[$area]) {
+            throw (
+                New-RepoFlowCliUsageException `
+                    -Message "Unsupported RepoFlow command: $area $action." `
+                    -Topic $area
+            )
+        }
+
+        $invokeParameters['Action'] = $action
+    }
+
     if ($positionals.Count -gt 0) {
+        if ($invokeParameters.ContainsKey('Area')) {
+            throw (
+                New-RepoFlowCliUsageException `
+                    -Message 'Area was supplied both positionally and with -Area.' `
+                    -Topic $null
+            )
+        }
+
         $area = $positionals[0].Trim().ToLowerInvariant()
 
         if (-not $validActions.ContainsKey($area)) {
@@ -324,6 +371,14 @@ function Invoke-RepoFlowCli {
     }
 
     if ($positionals.Count -gt 1) {
+        if ($invokeParameters.ContainsKey('Action')) {
+            throw (
+                New-RepoFlowCliUsageException `
+                    -Message 'Action was supplied both positionally and with -Action.' `
+                    -Topic ([string]$invokeParameters['Area'])
+            )
+        }
+
         $action = $positionals[1].Trim().ToLowerInvariant()
         $area = [string]$invokeParameters['Area']
 

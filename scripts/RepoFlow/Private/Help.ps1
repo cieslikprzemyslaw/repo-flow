@@ -28,7 +28,8 @@ Launchers:
   rf is the recommended short command.
   repo-flow and repo-flow.ps1 remain backward-compatible entrypoints.
 
-Commands:  issue sync
+Commands:
+  issue sync
       Synchronise labels, milestones, and issues from issues-manifest.json.
 
   issue run
@@ -83,7 +84,8 @@ Common options:
   -h, --help
   --version
   -Number <number>
-  -Apply  -CiMode skip|observe|require-passing
+  -Apply
+  -CiMode skip|observe|require-passing
   -Repo <name>
   -ConfigPath <path>
 

@@ -17,6 +17,10 @@ Describe 'RepoFlow CLI parser' {
 
         $result | Should -Match 'Usage:'
         $result | Should -Match 'rf --version'
+        $result | Should -Match '(?m)^Commands:\r?$'
+        $result | Should -Match '(?m)^  -Apply\r?$'
+        $result |
+            Should -Match '(?m)^  -CiMode skip\|observe\|require-passing\r?$'
     }
 
     It 'supports root -h and --help' {
@@ -85,6 +89,32 @@ Describe 'RepoFlow CLI parser' {
                 $Apply -eq $true -and
                 $Repo -eq 'repo-flow' -and
                 $CiMode -eq 'require-passing'
+            }
+    }
+
+
+    It 'preserves legacy named area and action parameters' {
+        Mock -CommandName Invoke-RepoFlow -ModuleName RepoFlow
+
+        Invoke-RepoFlowCli `
+            -Arguments @(
+                '-Area'
+                'issue'
+                '-Action'
+                'run'
+                '-Number'
+                '12'
+            ) `
+            -RepositoryRoot $script:TestRepositoryRoot
+
+        Should -Invoke -CommandName Invoke-RepoFlow `
+            -ModuleName RepoFlow `
+            -Times 1 `
+            -Exactly `
+            -ParameterFilter {
+                $Area -eq 'issue' -and
+                $Action -eq 'run' -and
+                $Number -eq 12
             }
     }
 
