@@ -9,8 +9,10 @@ $privateFiles = @(
     'Markdown.ps1',
     'GitHub.ps1',
     'Git.ps1',
+    'Git.Resume.ps1',
     'AgentRunState.Core.ps1',
     'AgentRunState.Records.ps1',
+    'AgentRunState.Resume.ps1',
     'AgentRunState.Review.ps1',
     'Issues.ps1',
     'Branches.ps1',
@@ -26,6 +28,15 @@ $privateFiles = @(
     'Ci.ps1',
     'PrRepair.ps1',
     'Manifest.ps1',
+    'IssueResume.State.ps1',
+    'IssueResume.PlanInitial.ps1',
+    'IssueResume.PlanReview.ps1',
+    'IssueResume.Plan.ps1',
+    'IssueResume.Resolve.ps1',
+    'IssueResume.Agent.ps1',
+    'IssueResume.GitHub.ps1',
+    'IssueResume.Ci.ps1',
+    'IssueResume.Workflow.ps1',
     'Workflows.ps1'
 )
 

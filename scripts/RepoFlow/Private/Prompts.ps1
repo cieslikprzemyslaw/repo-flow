@@ -41,11 +41,29 @@ function New-RepoFlowInitialPrompt {
         $Issue,
 
         [Parameter(Mandatory)]
-        $Config
+        $Config,
+
+        [switch]$ResumeInterruptedWork
     )
 
     $checkInstruction = Get-RepoFlowProjectCheckInstruction -Config $Config
     $issueBody = Get-RepoFlowIssueBodyText -Issue $Issue
+    $resumeInstructions = ''
+
+    if ($ResumeInterruptedWork) {
+        $workingTreeFiles = Format-RepoFlowChangedFiles `
+            -Files (Get-RepoFlowWorkingTreeChangedFiles)
+        $resumeInstructions = @"
+Interrupted-run continuation:
+- Inspect and preserve the existing uncommitted changes before editing.
+- Continue from the current implementation; do not restart the issue.
+- Do not reset, restore, stash, discard, or overwrite valid partial work.
+- Complete only unfinished work required by the issue.
+
+Current uncommitted files:
+$workingTreeFiles
+"@
+    }
 
     return @"
 Implement GitHub issue #$($Issue.number): $($Issue.title)
@@ -56,6 +74,7 @@ The issue body is the complete task scope:
 $issueBody
 --- END ISSUE BODY ---
 
+$resumeInstructions
 Execution rules:
 - Read the root AGENTS.md once and only applicable nested AGENTS.md files.
 - Start with Relevant files from the issue and existing contracts near those files.

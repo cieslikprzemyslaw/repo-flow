@@ -38,6 +38,9 @@ Commands:
   issue continue
       Continue an open pull request using a selected PR comment.
 
+  issue resume
+      Reconstruct and continue the last validated issue workflow checkpoint.
+
   pr status
       Display pull-request details and checks.
 
@@ -135,6 +138,9 @@ RepoFlow issue commands
   rf issue continue -Number <issue> -PrCommentId <id>
   rf issue continue -Number <issue> -PrCommentId <id> -Apply
   rf issue continue -Number <issue> -PrCommentId <id> -Apply -Resume
+
+  rf issue resume -Number <issue>
+  rf issue resume -Number <issue> -Apply
 '@
         }
 
@@ -195,6 +201,27 @@ resets, restores, or stashes existing work.
 Use either -LastPrComment or -PrCommentId, not both.
 '@
         }
+        'issue/resume' {
+            return @'
+issue resume
+
+Reconstructs an existing issue or PR workflow from persisted run state and
+validates the configured repository, local and remote branches, pull request,
+head SHA, CI status, trusted review comments, and working-tree state.
+
+Plan:
+  rf issue resume -Number 67
+
+Apply:
+  rf issue resume -Number 67 -Apply
+
+The command never creates a duplicate branch or pull request. Conflicting or
+ambiguous state stops with an actionable error. Existing `issue continue
+-Resume` remains available for scripts that explicitly resume one interrupted
+review-comment agent run.
+'@
+        }
+
         'pr' {
             return @'
 RepoFlow pull-request commands

@@ -181,6 +181,13 @@ function Invoke-RepoFlowIssueRunWorkflow {
             throw 'Agent completed without changing files.'
         }
 
+        Set-RepoFlowRunCheckpoint `
+            -ConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -CurrentPhase 'issue-agent-completed' `
+            -SafePhase 'issue-agent-completed' `
+            -HeadSha (Get-RepoFlowCommitHash)
+
         $commitMessage = Get-RepoFlowInitialCommitMessage `
             -Issue $issue `
             -Config $config
@@ -261,14 +268,23 @@ function Invoke-RepoFlowIssueRunWorkflow {
             -CiJobIds @($ciIdentifiers.JobIds) `
             -HeadSha (Get-RepoFlowCommitHash)
 
-        Complete-RepoFlowRunRecord `
-            -ConfigPath $stateConfigPath `
-            -RunId ([string]$runRecord.runId) `
-            -Outcome 'completed'
+        if ($ciState.Status -in @('passed', 'skipped')) {
+            Complete-RepoFlowRunRecord `
+                -ConfigPath $stateConfigPath `
+                -RunId ([string]$runRecord.runId) `
+                -Outcome 'completed'
+        }
+        else {
+            Set-RepoFlowRunPaused `
+                -ConfigPath $stateConfigPath `
+                -RunId ([string]$runRecord.runId) `
+                -CurrentPhase "ci-$($ciState.Status)" `
+                -PauseReason "CI status is '$($ciState.Status)'."
+        }
 
         $commitHash = Get-RepoFlowShortCommitHash
         Write-Host ''
-        Write-Host 'Completed.'
+        Write-Host $(if ($ciState.Status -in @('passed', 'skipped')) { 'Completed.' } else { 'Paused after CI observation.' })
         Write-Host "Branch: $branchName"
         Write-Host "Commit: $commitHash"
         Write-Host "PR:     $($pullRequest.url)"
@@ -495,6 +511,13 @@ function Invoke-RepoFlowIssueContinueWorkflow {
             return
         }
 
+        Set-RepoFlowRunCheckpoint `
+            -ConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -CurrentPhase 'review-agent-completed' `
+            -SafePhase 'review-agent-completed' `
+            -HeadSha (Get-RepoFlowCommitHash)
+
         $commitMessage = Get-RepoFlowReviewCommitMessage `
             -Issue $issue `
             -Config $config
@@ -551,13 +574,22 @@ function Invoke-RepoFlowIssueContinueWorkflow {
             -CiJobIds @($ciIdentifiers.JobIds) `
             -HeadSha $expectedHeadSha
 
-        Complete-RepoFlowRunRecord `
-            -ConfigPath $stateConfigPath `
-            -RunId ([string]$runRecord.runId) `
-            -Outcome 'completed'
+        if ($ciState.Status -in @('passed', 'skipped')) {
+            Complete-RepoFlowRunRecord `
+                -ConfigPath $stateConfigPath `
+                -RunId ([string]$runRecord.runId) `
+                -Outcome 'completed'
+        }
+        else {
+            Set-RepoFlowRunPaused `
+                -ConfigPath $stateConfigPath `
+                -RunId ([string]$runRecord.runId) `
+                -CurrentPhase "ci-$($ciState.Status)" `
+                -PauseReason "CI status is '$($ciState.Status)'."
+        }
 
         Write-Host ''
-        Write-Host 'Review feedback completed.'
+        Write-Host $(if ($ciState.Status -in @('passed', 'skipped')) { 'Review feedback completed.' } else { 'Review feedback pushed; workflow paused after CI observation.' })
         Write-Host "Commit: $(Get-RepoFlowShortCommitHash)"
         Write-Host "PR:     $($pullRequest.url)"
     }

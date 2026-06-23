@@ -101,6 +101,26 @@ The workflow:
 7. creates a draft or ready PR according to configuration;
 8. applies the configured CI policy.
 
+### Resume an interrupted issue or PR workflow
+
+Plan the exact next safe phase:
+
+```powershell
+.\repo-flow.ps1 issue resume -Number 66
+```
+
+Apply it:
+
+```powershell
+.\repo-flow.ps1 issue resume -Number 66 -Apply
+```
+
+RepoFlow loads the persisted run checkpoint and validates it against the selected repository, deterministic issue branch, local and remote branch heads, pull request, PR head SHA, CI result, trusted top-level review comments, and current working tree. Plan mode displays the saved phase and exact next action without mutating Git, GitHub, the agent, or the state file.
+
+Resume never creates a duplicate branch or pull request and does not replay completed phases. It stops on branch mismatches, dirty changes from another branch, divergent heads, multiple active runs, or other ambiguous state. A successful-but-uncheckpointed commit, push, or PR creation is adopted only when the live state agrees through explicit rules.
+
+Pending and failed CI remain resumable. Merged and closed PRs produce a terminal result. A new trusted top-level PR comment can start the existing review-feedback continuation without requiring the operator to guess its ID.
+
 ### Continue an open PR from review feedback
 
 Use the newest trusted top-level PR comment:

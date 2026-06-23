@@ -148,6 +148,25 @@ Describe 'RepoFlow CLI parser' {
             }
     }
 
+    It 'maps issue resume to Invoke-RepoFlow' {
+        Mock -CommandName Invoke-RepoFlow -ModuleName RepoFlow
+
+        Invoke-RepoFlowCli `
+            -Arguments @('issue', 'resume', '-Number', '5', '-Apply') `
+            -RepositoryRoot $script:TestRepositoryRoot
+
+        Should -Invoke -CommandName Invoke-RepoFlow `
+            -ModuleName RepoFlow `
+            -Times 1 `
+            -Exactly `
+            -ParameterFilter {
+                $Area -eq 'issue' -and
+                $Action -eq 'resume' -and
+                $Number -eq 5 -and
+                $Apply -eq $true
+            }
+    }
+
     It 'maps run options to Invoke-RepoFlow' {
         Mock -CommandName Invoke-RepoFlow -ModuleName RepoFlow
 

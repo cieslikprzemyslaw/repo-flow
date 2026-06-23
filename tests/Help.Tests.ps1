@@ -19,6 +19,12 @@ Describe 'RepoFlow help' {
             $helpText | Should -Match 'pr accept'
         }
 
+        It 'shows deterministic issue resume help' {
+            $helpText = Get-RepoFlowHelpText -Topic 'issue resume'
+            $helpText | Should -Match 'persisted run state'
+            $helpText | Should -Match 'never creates a duplicate branch or pull request'
+        }
+
         It 'shows command-specific repair help' {
             $helpText = Get-RepoFlowHelpText -Topic 'pr repair'
             $helpText | Should -Match 'Repairs a failed, open pull request'

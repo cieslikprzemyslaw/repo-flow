@@ -106,6 +106,27 @@ function Invoke-RepoFlow {
             return
         }
 
+        'issue/resume' {
+            if ($Number -le 0) {
+                throw "'issue resume' requires -Number."
+            }
+
+            if ($LastPrComment -or $PrCommentId -gt 0) {
+                throw (
+                    "'issue resume' discovers trusted saved feedback " +
+                    'deterministically and does not accept PR-comment selectors.'
+                )
+            }
+
+            Invoke-RepoFlowIssueResumeWorkflow `
+                -Number $Number `
+                -Apply:$Apply `
+                -CiMode $CiMode `
+                -Repo $Repo `
+                -ConfigPath $ConfigPath
+            return
+        }
+
         'issue/continue' {
             if ($Number -le 0) {
                 throw "'issue continue' requires -Number."
