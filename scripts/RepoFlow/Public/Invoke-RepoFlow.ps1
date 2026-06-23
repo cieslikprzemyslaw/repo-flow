@@ -152,6 +152,19 @@ function Invoke-RepoFlow {
             return
         }
 
+        'pr/repair' {
+            if ($Number -le 0) {
+                throw "'pr repair' requires -Number."
+            }
+
+            Invoke-RepoFlowPrRepairWorkflow `
+                -Number $Number `
+                -Apply:$Apply `
+                -Repo $Repo `
+                -ConfigPath $ConfigPath
+            return
+        }
+
         'pr/ready' {
             if ($Number -le 0) {
                 throw "'pr ready' requires -Number."

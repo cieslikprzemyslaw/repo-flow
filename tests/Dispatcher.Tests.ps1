@@ -23,6 +23,12 @@ Describe 'RepoFlow command dispatcher' {
             Should -Invoke Invoke-RepoFlowPrMergeWorkflow -Times 1 -Exactly
         }
 
+        It 'routes pr repair commands' {
+            Mock Invoke-RepoFlowPrRepairWorkflow { return }
+            Invoke-RepoFlow -Area pr -Action repair -Number 116
+            Should -Invoke Invoke-RepoFlowPrRepairWorkflow -Times 1 -Exactly
+        }
+
         It 'routes pr accept as a merge alias' {
             Mock Invoke-RepoFlowPrMergeWorkflow { return }
             Invoke-RepoFlow -Area pr -Action accept -Number 116

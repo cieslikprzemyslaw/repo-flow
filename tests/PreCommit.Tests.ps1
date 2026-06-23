@@ -62,6 +62,34 @@ Describe 'RepoFlow pre-commit recovery' {
             Should -Invoke Invoke-RepoFlowPreCommitFixAttempt -Times 1 -Exactly
         }
 
+        It 'runs the retry guard before retrying after a focused fix' {
+            $script:commitAttempt = 0
+            $script:guardCalls = 0
+
+            Mock Invoke-RepoFlowCommitAttempt {
+                $script:commitAttempt++
+
+                if ($script:commitAttempt -eq 1) {
+                    return [pscustomobject]@{
+                        ExitCode = 1
+                        Text = 'eslint failed'
+                    }
+                }
+
+                return [pscustomobject]@{ ExitCode = 0; Text = '' }
+            }
+            Mock Invoke-RepoFlowPreCommitFixAttempt { $true }
+
+            Complete-RepoFlowCommit `
+                -Issue $issue `
+                -Message 'Implement #67' `
+                -RepositoryRoot 'C:\repo' `
+                -Config $config `
+                -BeforeRetryCommit { $script:guardCalls++ }
+
+            $script:guardCalls | Should -Be 1
+        }
+
         It 'stops after the configured retry still fails' {
             Mock Invoke-RepoFlowCommitAttempt {
                 [pscustomobject]@{

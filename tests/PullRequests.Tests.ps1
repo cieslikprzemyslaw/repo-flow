@@ -62,6 +62,19 @@ None.
             $body | Should -Match '- Added identity\.'
             $body | Should -Match '- \[x\] Identity is shown\.'
         }
+
+        It 'extracts the originating issue number from a pull request body' {
+            $pullRequest = [pscustomobject]@{
+                body = @'
+Summary
+
+Closes #88
+'@
+            }
+
+            Get-RepoFlowPullRequestIssueNumber -PullRequest $pullRequest |
+                Should -Be 88
+        }
     }
 }
 

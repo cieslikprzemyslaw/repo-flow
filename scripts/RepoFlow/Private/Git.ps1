@@ -85,6 +85,16 @@ function Get-RepoFlowWorkingTreeStatus {
     )).Text.Trim()
 }
 
+function Invoke-RepoFlowLocalValidation {
+    [CmdletBinding()]
+    param()
+
+    return Invoke-RepoFlowCommand -Command 'git' -Arguments @(
+        'diff',
+        '--check'
+    ) -AllowFailure
+}
+
 function Assert-RepoFlowCleanWorkingTree {
     [CmdletBinding()]
     param(

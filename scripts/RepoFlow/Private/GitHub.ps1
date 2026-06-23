@@ -121,10 +121,36 @@ function Get-RepoFlowPullRequest {
         '--repo',
         $Repository,
         '--json',
-        'number,title,state,isDraft,mergedAt,mergeStateStatus,baseRefName,headRefName,headRefOid,url,reviewDecision,author'
+        'number,title,state,isDraft,mergedAt,mergeStateStatus,baseRefName,headRefName,headRefOid,url,reviewDecision,author,body'
     )
 
     return $result.Data
+}
+
+function Get-RepoFlowPullRequestIssueNumber {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        $PullRequest
+    )
+
+    $body = [string](Get-RepoFlowProperty -Object $PullRequest -Name 'body' -Default '')
+
+    foreach ($pattern in @(
+        '(?m)^(?:Closes|Fixes|Resolves|Implements) #(?<number>\d+)\s*$',
+        '(?m)^(?:Closes|Fixes|Resolves|Implements)\s+#(?<number>\d+)\s*$'
+    )) {
+        $match = [regex]::Match($body, $pattern)
+
+        if ($match.Success) {
+            return [int]$match.Groups['number'].Value
+        }
+    }
+
+    throw (
+        'Could not determine the originating issue number from the ' +
+        "pull request body."
+    )
 }
 
 function New-RepoFlowPullRequest {

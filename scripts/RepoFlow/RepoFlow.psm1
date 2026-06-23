@@ -22,6 +22,7 @@ $privateFiles = @(
     'ReviewFeedback.ps1',
     'CiContext.ps1',
     'Ci.ps1',
+    'PrRepair.ps1',
     'Manifest.ps1',
     'Workflows.ps1'
 )

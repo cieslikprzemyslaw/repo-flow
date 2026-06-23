@@ -304,7 +304,7 @@ function Invoke-RepoFlowCli {
 
     $validActions = @{
         issue = @('sync', 'run', 'continue')
-        pr = @('status', 'watch', 'ready', 'merge', 'accept')
+        pr = @('status', 'watch', 'ready', 'merge', 'accept', 'repair')
         branch = @('cleanup')
         ci = @('watch')
         config = @('validate', 'show')

@@ -83,5 +83,51 @@ Describe 'RepoFlow prompt scope' {
             $prompt | Should -Match 'Read the failed-check context first'
             $prompt | Should -Match 'Do not rescan the repository'
         }
+
+        It 'keeps PR repairs focused on the live head, diagnostics, and validation' {
+            $pullRequest = [pscustomobject]@{
+                number = 116
+                title = 'Fix CI'
+                url = 'https://example.test/pull/116'
+            }
+            $diagnostics = @(
+                [pscustomobject]@{
+                    Category = 'test'
+                    CheckName = 'Validate'
+                    StepName = 'Run tests'
+                    Command = 'npm test'
+                    Project = 'web'
+                    Suite = 'LoginForm'
+                    TestFile = 'src/components/loginForm/loginForm.test.tsx'
+                    TestName = 'shows validation error'
+                    Summary = 'expected true to be false'
+                    Expected = 'true'
+                    Received = 'false'
+                    SourcePath = 'src/components/loginForm/loginForm.test.tsx'
+                    SourceLine = 55
+                    Stack = 'stack'
+                }
+            )
+
+            $prompt = New-RepoFlowPrRepairPrompt `
+                -Issue $issue `
+                -PullRequest $pullRequest `
+                -HeadSha ('a' * 40) `
+                -ContextPath 'C:\temp\repair.md' `
+                -CurrentDiff ' src/app/company.tsx | 2 ++' `
+                -ChangedFiles @('src/app/company.tsx') `
+                -Diagnostics $diagnostics `
+                -Config $config `
+                -RepairAttemptLimit 2
+
+            $prompt | Should -Match 'PR head SHA'
+            $prompt | Should -Match 'Repair attempts allowed: 2'
+            $prompt | Should -Match 'git diff --check'
+            $prompt | Should -Match 'AGENTS.md'
+            $prompt | Should -Match 'Do not run project checks'
+            $prompt | Should -Match 'src/app/company.tsx'
+            $prompt | Should -Match 'expected true to be false'
+            $prompt | Should -Match 'Current diff'
+        }
     }
 }
