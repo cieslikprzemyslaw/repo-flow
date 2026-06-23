@@ -28,5 +28,6 @@ foreach ($file in $privateFiles) {
 }
 
 . (Join-Path $PSScriptRoot 'Public/Invoke-RepoFlow.ps1')
+. (Join-Path $PSScriptRoot 'Public/Invoke-RepoFlowCli.ps1')
 
-Export-ModuleMember -Function Invoke-RepoFlow
+Export-ModuleMember -Function Invoke-RepoFlow, Invoke-RepoFlowCli
