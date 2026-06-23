@@ -70,6 +70,34 @@ Describe 'RepoFlow CI state handling' {
             $pullRequest.headRefOid | Should -Be ('b' * 40)
             Should -Invoke Get-RepoFlowPullRequest -Times 2
         }
+
+        It 'keeps CI polling progress output unchanged' {
+            $script:messages = [System.Collections.Generic.List[string]]::new()
+
+            Mock Write-Host {
+                param($Object)
+
+                if ($PSBoundParameters.ContainsKey('Object')) {
+                    $script:messages.Add([string]$Object)
+                }
+            }
+
+            Mock Get-RepoFlowPrCheckState {
+                [pscustomobject]@{
+                    Status = 'pending'
+                    Checks = @()
+                }
+            }
+
+            $state = Wait-RepoFlowPrChecks `
+                -PullRequestNumber 116 `
+                -Repository 'owner/repository' `
+                -TimeoutSeconds 0 `
+                -PollSeconds 1
+
+            $state.Status | Should -Be 'pending'
+            $script:messages | Should -Contain '[CI] No checks reported yet.'
+        }
     }
 }
 

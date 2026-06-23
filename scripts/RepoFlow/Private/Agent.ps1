@@ -561,6 +561,24 @@ function Write-RepoFlowAgentUsage {
     }
 }
 
+function Write-RepoFlowAgentStreamLine {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [System.Text.StringBuilder]$Builder,
+
+        [Parameter(Mandatory)]
+        [string]$Line
+    )
+
+    if ($Builder.Length -gt 0) {
+        [void]$Builder.Append([Environment]::NewLine)
+    }
+
+    [void]$Builder.Append($Line)
+    Write-Host $Line
+}
+
 function Invoke-RepoFlowAgentProcessWithHeartbeat {
     [CmdletBinding()]
     param(
@@ -586,96 +604,106 @@ function Invoke-RepoFlowAgentProcessWithHeartbeat {
         [int]$HeartbeatSeconds = 15
     )
 
-    $promptPath = [System.IO.Path]::GetTempFileName()
-    $stdoutPath = [System.IO.Path]::GetTempFileName()
-    $stderrPath = [System.IO.Path]::GetTempFileName()
-    $exitCodePath = [System.IO.Path]::GetTempFileName()
-    $job = $null
+    $processStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $processStartInfo.FileName = $ExecutablePath
+    foreach ($argument in @($Arguments)) {
+        [void]$processStartInfo.ArgumentList.Add($argument)
+    }
+    $processStartInfo.WorkingDirectory = $WorkingDirectory
+    $processStartInfo.UseShellExecute = $false
+    $processStartInfo.CreateNoWindow = $true
+    $processStartInfo.RedirectStandardInput = $true
+    $processStartInfo.RedirectStandardOutput = $true
+    $processStartInfo.RedirectStandardError = $true
+    $processStartInfo.StandardInputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $processStartInfo.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $processStartInfo.StandardErrorEncoding = [System.Text.UTF8Encoding]::new($false)
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $processStartInfo
+    $process.EnableRaisingEvents = $true
+    $stdoutBuilder = [System.Text.StringBuilder]::new()
+    $stderrBuilder = [System.Text.StringBuilder]::new()
+    $startedAt = Get-Date
+    $stdoutDone = $false
+    $stderrDone = $false
+    $exitCode = 1
 
     try {
-        Set-Content -LiteralPath $promptPath -Value $Prompt -Encoding utf8
+        if (-not $process.Start()) {
+            throw "Failed to start the $Provider agent process."
+        }
 
-        $job = Start-Job -ScriptBlock {
-            param(
-                [string]$WorkingDirectory,
-                [string]$ExecutablePath,
-                [string[]]$CommandArguments,
-                [string]$InputPath,
-                [string]$OutputPath,
-                [string]$ErrorPath,
-                [string]$ResultPath
+        $process.StandardInput.Write($Prompt)
+        $process.StandardInput.Close()
+
+        $stdoutReader = $process.StandardOutput
+        $stderrReader = $process.StandardError
+        $stdoutTask = $stdoutReader.ReadLineAsync()
+        $stderrTask = $stderrReader.ReadLineAsync()
+
+        while ($true) {
+            if ($stdoutDone -and $stderrDone) {
+                if ($process.HasExited) {
+                    break
+                }
+
+                [void]$process.WaitForExit(50)
+                continue
+            }
+
+            $pendingTasks = New-Object 'System.Collections.Generic.List[System.Threading.Tasks.Task]'
+
+            if (-not $stdoutDone) {
+                [void]$pendingTasks.Add($stdoutTask)
+            }
+
+            if (-not $stderrDone) {
+                [void]$pendingTasks.Add($stderrTask)
+            }
+
+            $completedIndex = [System.Threading.Tasks.Task]::WaitAny(
+                [System.Threading.Tasks.Task[]]$pendingTasks.ToArray(),
+                50
             )
 
-            Set-Location -LiteralPath $WorkingDirectory
-            $inputContent = Get-Content -LiteralPath $InputPath -Raw
-            $inputContent | & $ExecutablePath @CommandArguments 1> $OutputPath 2> $ErrorPath
-            Set-Content -LiteralPath $ResultPath -Value $LASTEXITCODE -Encoding ascii
-        } -ArgumentList @(
-            $WorkingDirectory,
-            $executablePath,
-            $Arguments,
-            $promptPath,
-            $stdoutPath,
-            $stderrPath,
-            $exitCodePath
-        )
-
-        $startedAt = Get-Date
-        $lastOutputLength = 0L
-
-        while ($job.State -in @('NotStarted', 'Running')) {
-            Start-Sleep -Seconds $HeartbeatSeconds
-            $job = Get-Job -Id $job.Id
-            $elapsed = (Get-Date) - $startedAt
-            $minutes = [Math]::Floor($elapsed.TotalMinutes)
-            $seconds = $elapsed.Seconds
-            $changedFiles = Get-RepoFlowChangedFileCount
-            $stdoutLength = if (Test-Path -LiteralPath $stdoutPath) { (Get-Item -LiteralPath $stdoutPath).Length } else { 0L }
-            $stderrLength = if (Test-Path -LiteralPath $stderrPath) { (Get-Item -LiteralPath $stderrPath).Length } else { 0L }
-            $outputLength = $stdoutLength + $stderrLength
-
-            $activity = if ($changedFiles -gt 0) {
-                'editing files'
-            }
-            elseif ($outputLength -gt $lastOutputLength) {
-                'working'
-            }
-            else {
-                'analysing repository'
+            if ($completedIndex -lt 0) {
+                continue
             }
 
-            Write-Host ("[AGENT] {0} | {1}m {2}s | {3} | {4} changed file(s)" -f $Provider, $minutes, $seconds, $activity, $changedFiles)
-            $lastOutputLength = $outputLength
-        }
+            $finishedTask = $pendingTasks[$completedIndex]
 
-        Receive-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
+            if ($finishedTask -eq $stdoutTask) {
+                $stdoutLine = $stdoutTask.GetAwaiter().GetResult()
 
-        $stdout = Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue
-        $stderr = Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue
-        $exitCode = 1
+                if ($null -eq $stdoutLine) {
+                    $stdoutDone = $true
+                }
+                else {
+                    Write-RepoFlowAgentStreamLine `
+                        -Builder $stdoutBuilder `
+                        -Line $stdoutLine
+                    $stdoutTask = $stdoutReader.ReadLineAsync()
+                }
+            }
+            elseif ($finishedTask -eq $stderrTask) {
+                $stderrLine = $stderrTask.GetAwaiter().GetResult()
 
-        if (Test-Path -LiteralPath $exitCodePath) {
-            $exitCodeText = Get-Content -LiteralPath $exitCodePath -Raw -ErrorAction SilentlyContinue
-            $parsedExitCode = 0
-
-            if ([int]::TryParse($exitCodeText.Trim(), [ref]$parsedExitCode)) {
-                $exitCode = $parsedExitCode
+                if ($null -eq $stderrLine) {
+                    $stderrDone = $true
+                }
+                else {
+                    Write-RepoFlowAgentStreamLine `
+                        -Builder $stderrBuilder `
+                        -Line $stderrLine
+                    $stderrTask = $stderrReader.ReadLineAsync()
+                }
             }
         }
 
-        if ($job.State -eq 'Failed') {
-            $exitCode = 1
-            $jobError = @(
-                $job.ChildJobs |
-                ForEach-Object { $_.JobStateInfo.Reason } |
-                Where-Object { $null -ne $_ }
-            ) -join [Environment]::NewLine
-
-            if (-not [string]::IsNullOrWhiteSpace($jobError)) {
-                $stderr = @($stderr, $jobError) -join [Environment]::NewLine
-            }
-        }
-
+        [void]$process.WaitForExit()
+        $exitCode = $process.ExitCode
+        $stdout = $stdoutBuilder.ToString()
+        $stderr = $stderrBuilder.ToString()
         $duration = (Get-Date) - $startedAt
 
         return [pscustomobject]@{
@@ -686,12 +714,23 @@ function Invoke-RepoFlowAgentProcessWithHeartbeat {
         }
     }
     finally {
-        if ($null -ne $job) {
-            Stop-Job -Job $job -ErrorAction SilentlyContinue
-            Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
-        }
+        if ($null -ne $process) {
+            if (-not $process.HasExited) {
+                try {
+                    $null = $process.Kill($true)
+                }
+                catch {
+                }
 
-        Remove-Item -LiteralPath $promptPath, $stdoutPath, $stderrPath, $exitCodePath -Force -ErrorAction SilentlyContinue
+                try {
+                    [void]$process.WaitForExit(5000)
+                }
+                catch {
+                }
+            }
+
+            $process.Dispose()
+        }
     }
 }
 

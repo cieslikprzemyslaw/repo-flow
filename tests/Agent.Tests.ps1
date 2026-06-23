@@ -3,6 +3,108 @@ BeforeDiscovery {
     Import-Module $modulePath -Force
 }
 
+function New-RepoFlowFakeAgentProcessFixture {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Directory,
+
+        [Parameter(Mandatory)]
+        [string]$Name,
+
+        [Parameter(Mandatory)]
+        $Spec
+    )
+
+    $scriptPath = Join-Path $Directory "$Name-fake-provider.ps1"
+    $specPath = Join-Path $Directory "$Name-fake-provider.json"
+    $providerScript = @'
+param(
+    [Parameter(Mandatory)]
+    [string]$SpecPath
+)
+
+$spec = Get-Content -LiteralPath $SpecPath -Raw -Encoding utf8 | ConvertFrom-Json
+
+if ($spec.spawnChild -eq $true) {
+    $childScriptPath = Join-Path (
+        [System.IO.Path]::GetDirectoryName($SpecPath)
+    ) 'fake-child-provider.ps1'
+    $childScript = @(
+        'param(',
+        '    [Parameter(Mandatory)]',
+        '    [string]$MarkerPath',
+        ')',
+        '',
+        'Start-Sleep -Seconds 2',
+        "Set-Content -LiteralPath `\$MarkerPath -Value 'child survived' -Encoding utf8"
+    ) -join [Environment]::NewLine
+
+    Set-Content -LiteralPath $childScriptPath -Value $childScript -Encoding utf8
+
+    $childArguments = @(
+        '-NoProfile',
+        '-File',
+        $childScriptPath,
+        [string]$spec.markerPath
+    )
+
+    if ($IsWindows) {
+        $null = Start-Process `
+            -FilePath ([string]$spec.pwshPath) `
+            -ArgumentList $childArguments `
+            -WindowStyle Hidden `
+            -PassThru
+    }
+    else {
+        $null = Start-Process `
+            -FilePath ([string]$spec.pwshPath) `
+            -ArgumentList $childArguments `
+            -PassThru
+    }
+}
+
+foreach ($step in @($spec.steps)) {
+    if ([int]$step.delayMs -gt 0) {
+        Start-Sleep -Milliseconds ([int]$step.delayMs)
+    }
+
+    $text = [string]$step.text
+    $stream = [string]$step.stream
+
+    if ($stream -eq 'stderr') {
+        [Console]::Error.WriteLine($text)
+        [Console]::Error.Flush()
+    }
+    else {
+        [Console]::Out.WriteLine($text)
+        [Console]::Out.Flush()
+    }
+}
+
+if ([int]$spec.waitMs -gt 0) {
+    Start-Sleep -Milliseconds ([int]$spec.waitMs)
+}
+
+if (-not [string]::IsNullOrWhiteSpace([string]$spec.finalMessagePath)) {
+    Set-Content `
+        -LiteralPath ([string]$spec.finalMessagePath) `
+        -Value ([string]$spec.finalMessage) `
+        -Encoding utf8
+}
+
+exit ([int]$spec.exitCode)
+'@
+
+    Set-Content -LiteralPath $scriptPath -Value $providerScript -Encoding utf8
+    $Spec | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $specPath -Encoding utf8
+
+    return [pscustomobject]@{
+        ScriptPath = $scriptPath
+        SpecPath = $specPath
+    }
+}
+
 Describe 'RepoFlow Codex usage parsing' {
     InModuleScope RepoFlow {
         It 'extracts token usage from Codex JSON events' {
@@ -24,6 +126,357 @@ Describe 'RepoFlow Codex usage parsing' {
 
             $usage.InputTokens | Should -Be 0
             $usage.OutputTokens | Should -Be 0
+        }
+    }
+}
+
+Describe 'RepoFlow agent process streaming' {
+    InModuleScope RepoFlow {
+        BeforeEach {
+            $script:hostOutput = [System.Collections.Generic.List[string]]::new()
+            $script:throwOnHostLine = $null
+            Mock Write-Host {
+                param($Object)
+
+                if ($PSBoundParameters.ContainsKey('Object')) {
+                    $script:hostOutput.Add([string]$Object)
+                    if (
+                        -not [string]::IsNullOrWhiteSpace($script:throwOnHostLine) -and
+                        [string]$Object -eq [string]$script:throwOnHostLine
+                    ) {
+                        throw 'Simulated cancellation'
+                    }
+                }
+            }
+        }
+
+        It 'streams delayed stdout before the provider exits' {
+            $fixture = New-RepoFlowFakeAgentProcessFixture `
+                -Directory $TestDrive `
+                -Name 'delayed-stdout' `
+                -Spec ([pscustomobject]@{
+                    pwshPath = (Get-Command pwsh).Source
+                    exitCode = 0
+                    waitMs = 250
+                    steps = @(
+                        [pscustomobject]@{
+                            stream = 'stdout'
+                            text = 'stdout one'
+                            delayMs = 100
+                        }
+                        [pscustomobject]@{
+                            stream = 'stdout'
+                            text = 'stdout two'
+                            delayMs = 100
+                        }
+                    )
+                })
+
+            $result = Invoke-RepoFlowAgentProcessWithHeartbeat `
+                -Provider 'future-provider' `
+                -ExecutablePath (Get-Command pwsh).Source `
+                -Arguments @(
+                    '-NoProfile',
+                    '-File',
+                    $fixture.ScriptPath,
+                    $fixture.SpecPath
+                ) `
+                -WorkingDirectory $TestDrive `
+                -Prompt 'ignored' `
+                -FinalMessagePath (Join-Path $TestDrive 'final.md') `
+                -HeartbeatSeconds 5
+
+            @($script:hostOutput) | Should -Be @('stdout one', 'stdout two')
+            ($result.StandardOutput -split '\r?\n') |
+                Should -Be @('stdout one', 'stdout two')
+            $result.StandardError | Should -Be ''
+            $result.ExitCode | Should -Be 0
+        }
+
+        It 'streams delayed stderr before the provider exits' {
+            $fixture = New-RepoFlowFakeAgentProcessFixture `
+                -Directory $TestDrive `
+                -Name 'delayed-stderr' `
+                -Spec ([pscustomobject]@{
+                    pwshPath = (Get-Command pwsh).Source
+                    exitCode = 0
+                    waitMs = 250
+                    steps = @(
+                        [pscustomobject]@{
+                            stream = 'stderr'
+                            text = 'stderr one'
+                            delayMs = 100
+                        }
+                        [pscustomobject]@{
+                            stream = 'stderr'
+                            text = 'stderr two'
+                            delayMs = 100
+                        }
+                    )
+                })
+
+            $result = Invoke-RepoFlowAgentProcessWithHeartbeat `
+                -Provider 'future-provider' `
+                -ExecutablePath (Get-Command pwsh).Source `
+                -Arguments @(
+                    '-NoProfile',
+                    '-File',
+                    $fixture.ScriptPath,
+                    $fixture.SpecPath
+                ) `
+                -WorkingDirectory $TestDrive `
+                -Prompt 'ignored' `
+                -FinalMessagePath (Join-Path $TestDrive 'final.md') `
+                -HeartbeatSeconds 5
+
+            @($script:hostOutput) | Should -Be @('stderr one', 'stderr two')
+            $result.StandardOutput | Should -Be ''
+            ($result.StandardError -split '\r?\n') |
+                Should -Be @('stderr one', 'stderr two')
+            $result.ExitCode | Should -Be 0
+        }
+
+        It 'preserves interleaved stdout and stderr without a synthetic heartbeat' {
+            $fixture = New-RepoFlowFakeAgentProcessFixture `
+                -Directory $TestDrive `
+                -Name 'interleaved' `
+                -Spec ([pscustomobject]@{
+                    pwshPath = (Get-Command pwsh).Source
+                    exitCode = 0
+                    waitMs = 100
+                    steps = @(
+                        [pscustomobject]@{
+                            stream = 'stdout'
+                            text = 'stdout one'
+                            delayMs = 0
+                        }
+                        [pscustomobject]@{
+                            stream = 'stderr'
+                            text = 'stderr two'
+                            delayMs = 50
+                        }
+                        [pscustomobject]@{
+                            stream = 'stdout'
+                            text = 'stdout three'
+                            delayMs = 50
+                        }
+                    )
+                })
+
+            $result = Invoke-RepoFlowAgentProcessWithHeartbeat `
+                -Provider 'future-provider' `
+                -ExecutablePath (Get-Command pwsh).Source `
+                -Arguments @(
+                    '-NoProfile',
+                    '-File',
+                    $fixture.ScriptPath,
+                    $fixture.SpecPath
+                ) `
+                -WorkingDirectory $TestDrive `
+                -Prompt 'ignored' `
+                -FinalMessagePath (Join-Path $TestDrive 'final.md') `
+                -HeartbeatSeconds 5
+
+            @($script:hostOutput) | Should -Be @(
+                'stdout one',
+                'stderr two',
+                'stdout three'
+            )
+            ($script:hostOutput -join [Environment]::NewLine) |
+                Should -Not -Match '\[AGENT\].*working'
+            ($result.StandardOutput -split '\r?\n') |
+                Should -Be @('stdout one', 'stdout three')
+            $result.StandardError | Should -Be 'stderr two'
+            $result.ExitCode | Should -Be 0
+        }
+
+        It 'does not emit any synthetic heartbeat for a silent agent' {
+            $fixture = New-RepoFlowFakeAgentProcessFixture `
+                -Directory $TestDrive `
+                -Name 'silent' `
+                -Spec ([pscustomobject]@{
+                    pwshPath = (Get-Command pwsh).Source
+                    exitCode = 0
+                    waitMs = 100
+                    steps = @()
+                })
+
+            $result = Invoke-RepoFlowAgentProcessWithHeartbeat `
+                -Provider 'future-provider' `
+                -ExecutablePath (Get-Command pwsh).Source `
+                -Arguments @(
+                    '-NoProfile',
+                    '-File',
+                    $fixture.ScriptPath,
+                    $fixture.SpecPath
+                ) `
+                -WorkingDirectory $TestDrive `
+                -Prompt 'ignored' `
+                -FinalMessagePath (Join-Path $TestDrive 'final.md') `
+                -HeartbeatSeconds 5
+
+            $script:hostOutput | Should -BeEmpty
+            $result.StandardOutput | Should -Be ''
+            $result.StandardError | Should -Be ''
+            $result.ExitCode | Should -Be 0
+        }
+
+        It 'does not duplicate output after the provider completes' {
+            $fixture = New-RepoFlowFakeAgentProcessFixture `
+                -Directory $TestDrive `
+                -Name 'no-duplicate' `
+                -Spec ([pscustomobject]@{
+                    pwshPath = (Get-Command pwsh).Source
+                    exitCode = 0
+                    waitMs = 50
+                    steps = @(
+                        [pscustomobject]@{
+                            stream = 'stdout'
+                            text = 'final line'
+                            delayMs = 0
+                        }
+                    )
+                })
+
+            $result = Invoke-RepoFlowAgentProcessWithHeartbeat `
+                -Provider 'future-provider' `
+                -ExecutablePath (Get-Command pwsh).Source `
+                -Arguments @(
+                    '-NoProfile',
+                    '-File',
+                    $fixture.ScriptPath,
+                    $fixture.SpecPath
+                ) `
+                -WorkingDirectory $TestDrive `
+                -Prompt 'ignored' `
+                -FinalMessagePath (Join-Path $TestDrive 'final.md') `
+                -HeartbeatSeconds 5
+
+            @($script:hostOutput) | Should -Be @('final line')
+            $script:hostOutput.Count | Should -Be 1
+            $result.StandardOutput | Should -Be 'final line'
+        }
+
+        It 'returns the provider exit code and captured diagnostics when the provider fails' {
+            $fixture = New-RepoFlowFakeAgentProcessFixture `
+                -Directory $TestDrive `
+                -Name 'non-zero-exit' `
+                -Spec ([pscustomobject]@{
+                    pwshPath = (Get-Command pwsh).Source
+                    exitCode = 7
+                    waitMs = 0
+                    steps = @(
+                        [pscustomobject]@{
+                            stream = 'stdout'
+                            text = 'before failure'
+                            delayMs = 0
+                        }
+                        [pscustomobject]@{
+                            stream = 'stderr'
+                            text = 'failure detail'
+                            delayMs = 0
+                        }
+                    )
+                })
+
+            $result = Invoke-RepoFlowAgentProcessWithHeartbeat `
+                -Provider 'future-provider' `
+                -ExecutablePath (Get-Command pwsh).Source `
+                -Arguments @(
+                    '-NoProfile',
+                    '-File',
+                    $fixture.ScriptPath,
+                    $fixture.SpecPath
+                ) `
+                -WorkingDirectory $TestDrive `
+                -Prompt 'ignored' `
+                -FinalMessagePath (Join-Path $TestDrive 'final.md') `
+                -HeartbeatSeconds 5
+
+            $result.ExitCode | Should -Be 7
+            $result.StandardOutput | Should -Be 'before failure'
+            $result.StandardError | Should -Be 'failure detail'
+        }
+
+        It 'captures the final message written by a fake provider' {
+            $finalMessagePath = Join-Path $TestDrive 'final-message.md'
+            $fixture = New-RepoFlowFakeAgentProcessFixture `
+                -Directory $TestDrive `
+                -Name 'final-message' `
+                -Spec ([pscustomobject]@{
+                    pwshPath = (Get-Command pwsh).Source
+                    exitCode = 0
+                    waitMs = 0
+                    finalMessagePath = $finalMessagePath
+                    finalMessage = 'final from provider'
+                    steps = @(
+                        [pscustomobject]@{
+                            stream = 'stdout'
+                            text = 'streamed output'
+                            delayMs = 0
+                        }
+                    )
+                })
+
+            $result = Invoke-RepoFlowAgentProcessWithHeartbeat `
+                -Provider 'future-provider' `
+                -ExecutablePath (Get-Command pwsh).Source `
+                -Arguments @(
+                    '-NoProfile',
+                    '-File',
+                    $fixture.ScriptPath,
+                    $fixture.SpecPath
+                ) `
+                -WorkingDirectory $TestDrive `
+                -Prompt 'ignored' `
+                -FinalMessagePath $finalMessagePath `
+                -HeartbeatSeconds 5
+
+            Get-RepoFlowAgentFinalMessage -Path $finalMessagePath |
+                Should -Be 'final from provider'
+            $result.StandardOutput | Should -Be 'streamed output'
+        }
+
+        It 'kills the provider tree when output streaming is interrupted' {
+            $markerPath = Join-Path $TestDrive 'cancellation-marker.txt'
+            $fixture = New-RepoFlowFakeAgentProcessFixture `
+                -Directory $TestDrive `
+                -Name 'cancelled-tree' `
+                -Spec ([pscustomobject]@{
+                    pwshPath = (Get-Command pwsh).Source
+                    exitCode = 0
+                    waitMs = 10000
+                    spawnChild = $true
+                    markerPath = $markerPath
+                    steps = @(
+                        [pscustomobject]@{
+                            stream = 'stdout'
+                            text = 'stop now'
+                            delayMs = 0
+                        }
+                    )
+                })
+
+            $script:throwOnHostLine = 'stop now'
+
+            {
+                Invoke-RepoFlowAgentProcessWithHeartbeat `
+                    -Provider 'future-provider' `
+                    -ExecutablePath (Get-Command pwsh).Source `
+                    -Arguments @(
+                        '-NoProfile',
+                        '-File',
+                        $fixture.ScriptPath,
+                        $fixture.SpecPath
+                    ) `
+                    -WorkingDirectory $TestDrive `
+                    -Prompt 'ignored' `
+                    -FinalMessagePath (Join-Path $TestDrive 'final.md') `
+                    -HeartbeatSeconds 5
+            } | Should -Throw '*Simulated cancellation*'
+
+            Start-Sleep -Seconds 3
+            Test-Path -LiteralPath $markerPath | Should -BeFalse
         }
     }
 }
@@ -253,6 +706,51 @@ Describe 'RepoFlow agent provider dispatch' {
             Should -Invoke Invoke-RepoFlowCodexWithHeartbeat -Times 0 -Exactly
         }
 
+        It 'keeps the initial agent metadata visible before dispatching' {
+            $script:messages = [System.Collections.Generic.List[string]]::new()
+
+            Mock Write-Host {
+                param($Object)
+
+                if ($PSBoundParameters.ContainsKey('Object')) {
+                    $script:messages.Add([string]$Object)
+                }
+            }
+            Mock Invoke-RepoFlowCodexWithHeartbeat {
+                [pscustomobject]@{
+                    ExitCode = 0
+                    Text = ''
+                    Usage = New-RepoFlowAgentUsage
+                    DurationSeconds = 0
+                }
+            } -ParameterFilter { $Model -eq 'gpt-5.5' -and $ReasoningEffort -eq 'medium' }
+
+            $config = [pscustomobject]@{
+                agent = [pscustomobject]@{
+                    provider = 'codex'
+                    command = 'codex'
+                    model = 'gpt-5.5'
+                    minimumCliVersion = $null
+                    heartbeatSeconds = 5
+                    reasoningEffort = 'medium'
+                }
+            }
+
+            Invoke-RepoFlowAgent `
+                -RepositoryRoot $TestDrive `
+                -Prompt 'do work' `
+                -FinalMessagePath (Join-Path $TestDrive 'final.md') `
+                -Config $config |
+                Out-Null
+
+            @($script:messages) | Should -Be @(
+                '[AGENT] Provider: codex',
+                '[AGENT] Model: gpt-5.5',
+                '[AGENT] CLI version: 2.1.154',
+                '[AGENT] Reasoning effort: medium'
+            )
+        }
+
         It 'rejects unsupported providers before invoking a CLI' {
             $config = [pscustomobject]@{
                 agent = [pscustomobject]@{
@@ -308,6 +806,46 @@ Describe 'RepoFlow agent provider dispatch' {
             } | Should -Throw '*codex*Installed version: 1.9.9*Required minimum version: 2.0.0*'
 
             Should -Invoke Invoke-RepoFlowCodexWithHeartbeat -Times 0 -Exactly
+        }
+    }
+}
+
+Describe 'RepoFlow agent run state tracking' {
+    InModuleScope RepoFlow {
+        It 'records the current changed-file count when starting a review run' {
+            $script:capturedState = $null
+
+            Mock Read-RepoFlowAgentRunState { $null }
+            Mock Get-RepoFlowCommitHash { 'a' * 40 }
+            Mock Get-RepoFlowChangedFileCount { 3 }
+            Mock Write-RepoFlowAgentRunState {
+                param(
+                    [string]$RepositoryRoot,
+                    $State
+                )
+
+                $script:capturedState = $State
+            }
+
+            $config = [pscustomobject]@{
+                agent = [pscustomobject]@{
+                    provider = 'codex'
+                    model = 'gpt-5.5'
+                }
+            }
+
+            $state = Start-RepoFlowReviewAgentRunState `
+                -RepositoryRoot $TestDrive `
+                -Repository 'owner/repository' `
+                -Branch 'review/123' `
+                -IssueNumber 123 `
+                -PullRequestNumber 456 `
+                -PrCommentId 789 `
+                -Config $config
+
+            $script:capturedState | Should -Not -BeNullOrEmpty
+            $state.changedFileCount | Should -Be 3
+            $script:capturedState.changedFileCount | Should -Be 3
         }
     }
 }
