@@ -163,6 +163,8 @@ function Invoke-RepoFlowCli {
         'prnumber' = 'Number'
         'prcommentid' = 'PrCommentId'
         'cimode' = 'CiMode'
+        'runid' = 'RunId'
+        'outcome' = 'Outcome'
         'repo' = 'Repo'
         'repository' = 'Repo'
         'repositoryname' = 'Repo'
@@ -307,6 +309,7 @@ function Invoke-RepoFlowCli {
         pr = @('status', 'watch', 'ready', 'merge', 'accept', 'repair')
         branch = @('cleanup')
         ci = @('watch')
+        run = @('list', 'show', 'complete', 'prune')
         config = @('validate', 'show')
         repo = @('list', 'current', 'use', 'reset')
     }

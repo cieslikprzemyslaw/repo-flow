@@ -7,6 +7,7 @@ function Invoke-RepoFlow {
             'pr',
             'branch',
             'ci',
+            'run',
             'config',
             'repo',
             'help'
@@ -38,6 +39,11 @@ function Invoke-RepoFlow {
 
         [ValidateSet('skip', 'observe', 'require-passing')]
         [string]$CiMode,
+
+        [string]$RunId,
+
+        [ValidateSet('completed', 'abandoned')]
+        [string]$Outcome = 'completed',
 
         [Parameter(Position = 2)]
         [Alias('Repository', 'RepositoryName')]
@@ -208,6 +214,45 @@ function Invoke-RepoFlow {
 
             Invoke-RepoFlowPrWatchWorkflow `
                 -Number $Number `
+                -Repo $Repo `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'run/list' {
+            Invoke-RepoFlowRunListWorkflow `
+                -Repo $Repo `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'run/show' {
+            if ([string]::IsNullOrWhiteSpace($RunId)) {
+                throw "'run show' requires -RunId."
+            }
+
+            Invoke-RepoFlowRunShowWorkflow `
+                -RunId $RunId `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'run/complete' {
+            if ([string]::IsNullOrWhiteSpace($RunId)) {
+                throw "'run complete' requires -RunId."
+            }
+
+            Invoke-RepoFlowRunCompleteWorkflow `
+                -RunId $RunId `
+                -Apply:$Apply `
+                -Outcome $Outcome `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'run/prune' {
+            Invoke-RepoFlowRunPruneWorkflow `
+                -Apply:$Apply `
                 -Repo $Repo `
                 -ConfigPath $ConfigPath
             return
