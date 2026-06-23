@@ -184,10 +184,13 @@ function Read-RepoFlowStateDocument {
         -Name 'runs' `
         -Default @()
 
-    if ($null -ne $activeRepository) {
+    if (-not [string]::IsNullOrWhiteSpace([string]$activeRepository)) {
         Assert-RepoFlowString `
             -Value $activeRepository `
             -Path '$.activeRepository'
+    }
+    else {
+        $activeRepository = $null
     }
 
     Assert-RepoFlowArray `

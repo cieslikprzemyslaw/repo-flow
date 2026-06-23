@@ -11,6 +11,10 @@ Describe 'RepoFlow persisted run state' {
             $script:configPath = Join-Path $TestDrive '.repo-flow.json'
             $script:statePath = Join-Path $TestDrive '.repo-flow.state.json'
 
+            Remove-Item -LiteralPath $script:statePath -Force -ErrorAction SilentlyContinue
+            Get-ChildItem -LiteralPath $TestDrive -Filter '.repo-flow.state.json*.tmp' -ErrorAction SilentlyContinue |
+                Remove-Item -Force -ErrorAction SilentlyContinue
+
             New-Item -ItemType Directory -Path $script:repositoryA -Force | Out-Null
             New-Item -ItemType Directory -Path $script:repositoryB -Force | Out-Null
 
