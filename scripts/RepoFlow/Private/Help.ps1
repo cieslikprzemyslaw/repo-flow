@@ -60,6 +60,18 @@ Commands:
   ci watch
       Wait for pull-request CI checks.
 
+  run list
+      Display persisted workflow run records.
+
+  run show
+      Display one persisted workflow run record.
+
+  run complete
+      Plan or mark a persisted run as completed or abandoned.
+
+  run prune
+      Plan or prune completed and abandoned run records.
+
   config validate
       Validate .repo-flow.json.
 
@@ -300,6 +312,73 @@ Delete safe merged branches:
 RepoFlow CI commands
 
   rf ci watch -Number <pr>
+'@
+        }
+
+        'run' {
+            return @'
+RepoFlow run commands
+
+  rf run list
+  rf run list -Repo <name>
+  rf run show -RunId <id>
+  rf run complete -RunId <id>
+  rf run complete -RunId <id> -Apply
+  rf run prune
+  rf run prune -Apply
+'@
+        }
+
+        'run/list' {
+            return @'
+run list
+
+Displays persisted workflow run records stored in .repo-flow.state.json.
+
+Examples:
+  rf run list
+  rf run list -Repo repo-flow
+'@
+        }
+
+        'run/show' {
+            return @'
+run show
+
+Displays one persisted workflow run record by ID.
+
+Example:
+  rf run show -RunId repo-flow-issue-run-4-20260623T120000Z-abc12345
+'@
+        }
+
+        'run/complete' {
+            return @'
+run complete
+
+Marks a persisted workflow run record as completed or abandoned.
+
+Plan:
+  rf run complete -RunId <id>
+
+Apply:
+  rf run complete -RunId <id> -Apply
+  rf run complete -RunId <id> -Apply -Outcome abandoned
+'@
+        }
+
+        'run/prune' {
+            return @'
+run prune
+
+Prunes completed and abandoned persisted workflow run records.
+
+Plan:
+  rf run prune
+
+Apply:
+  rf run prune -Apply
+  rf run prune -Apply -Repo repo-flow
 '@
         }
 

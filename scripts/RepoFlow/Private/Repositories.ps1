@@ -47,7 +47,7 @@ function Resolve-RepoFlowRegisteredPath {
     )
 }
 
-function Get-RepoFlowRepositoryStatePath {
+function Get-RepoFlowStatePath {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -57,6 +57,275 @@ function Get-RepoFlowRepositoryStatePath {
     return Join-Path (Split-Path -Parent $ConfigPath) '.repo-flow.state.json'
 }
 
+function Get-RepoFlowRepositoryStatePath {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ConfigPath
+    )
+
+    return Get-RepoFlowStatePath -ConfigPath $ConfigPath
+}
+
+function Open-RepoFlowStateLock {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$StatePath
+    )
+
+    $lockPath = "$StatePath.lock"
+
+    try {
+        return [System.IO.FileStream]::new(
+            $lockPath,
+            [System.IO.FileMode]::CreateNew,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None,
+            1,
+            [System.IO.FileOptions]::DeleteOnClose
+        )
+    }
+    catch {
+        throw (
+            'RepoFlow state is busy and could not be locked for an atomic ' +
+            "update: $StatePath"
+        )
+    }
+}
+
+function New-RepoFlowStateDocument {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [string]$ActiveRepository = $null,
+
+        [AllowEmptyCollection()]
+        [object[]]$Runs = @()
+    )
+
+    return [pscustomobject][ordered]@{
+        schemaVersion = 2
+        activeRepository = $ActiveRepository
+        runs = @($Runs)
+    }
+}
+
+function Read-RepoFlowStateDocument {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ConfigPath
+    )
+
+    $statePath = Get-RepoFlowStatePath -ConfigPath $ConfigPath
+
+    if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
+        return $null
+    }
+
+    try {
+        $state = Get-Content -LiteralPath $statePath -Raw -Encoding utf8 |
+            ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        throw (
+            'RepoFlow state contains invalid JSON. Move or delete the file ' +
+            "and retry: $statePath"
+        )
+    }
+
+    $hasSchemaVersion = $null -ne $state.PSObject.Properties['schemaVersion']
+    $hasRuns = $null -ne $state.PSObject.Properties['runs']
+
+    if (-not $hasSchemaVersion -and -not $hasRuns) {
+        Assert-RepoFlowAllowedProperties `
+            -Object $state `
+            -Allowed @('activeRepository') `
+            -Path '$'
+
+        $activeRepository = Get-RepoFlowProperty `
+            -Object $state `
+            -Name 'activeRepository' `
+            -Default $null
+
+        Assert-RepoFlowString `
+            -Value $activeRepository `
+            -Path '$.activeRepository'
+
+        return New-RepoFlowStateDocument `
+            -ActiveRepository ([string]$activeRepository) `
+            -Runs @()
+    }
+
+    Assert-RepoFlowAllowedProperties `
+        -Object $state `
+        -Allowed @('schemaVersion', 'activeRepository', 'runs') `
+        -Path '$'
+
+    $schemaVersion = Get-RepoFlowProperty `
+        -Object $state `
+        -Name 'schemaVersion' `
+        -Default $null
+
+    if ($schemaVersion -ne 2) {
+        throw (
+            'RepoFlow state schema is unsupported. Move or delete the file ' +
+            "and retry: $statePath"
+        )
+    }
+
+    $activeRepository = Get-RepoFlowProperty `
+        -Object $state `
+        -Name 'activeRepository' `
+        -Default $null
+    $runs = Get-RepoFlowProperty `
+        -Object $state `
+        -Name 'runs' `
+        -Default @()
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$activeRepository)) {
+        Assert-RepoFlowString `
+            -Value $activeRepository `
+            -Path '$.activeRepository'
+    }
+    else {
+        $activeRepository = $null
+    }
+
+    Assert-RepoFlowArray `
+        -Value $runs `
+        -Path '$.runs'
+
+    try {
+        $runRecords = @($runs)
+
+        for ($index = 0; $index -lt $runRecords.Count; $index++) {
+            Assert-RepoFlowRunRecord `
+                -Record $runRecords[$index] `
+                -Path ("$.runs[{0}]" -f $index)
+        }
+    }
+    catch {
+        throw (
+            'RepoFlow state contains an invalid or incompatible run record. ' +
+            "Move or delete the file and retry: $statePath"
+        )
+    }
+
+    return New-RepoFlowStateDocument `
+        -ActiveRepository $activeRepository `
+        -Runs @($runs)
+}
+
+function Write-RepoFlowStateDocument {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ConfigPath,
+
+        [Parameter(Mandatory)]
+        $Document
+    )
+
+    $statePath = Get-RepoFlowStatePath -ConfigPath $ConfigPath
+    $stateDirectory = Split-Path -Parent $statePath
+    $temporaryPath = "$statePath.$([guid]::NewGuid().ToString('N')).tmp"
+    $utf8WithoutBom = [System.Text.UTF8Encoding]::new($false)
+
+    New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
+
+    try {
+        [System.IO.File]::WriteAllText(
+            $temporaryPath,
+            ($Document | ConvertTo-Json -Depth 12),
+            $utf8WithoutBom
+        )
+        [System.IO.File]::Move($temporaryPath, $statePath, $true)
+    }
+    finally {
+        Remove-Item `
+            -LiteralPath $temporaryPath `
+            -Force `
+            -ErrorAction SilentlyContinue
+    }
+}
+
+function Invoke-RepoFlowStateMutation {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ConfigPath,
+
+        [Parameter(Mandatory)]
+        [scriptblock]$Update
+    )
+
+    $statePath = Get-RepoFlowStatePath -ConfigPath $ConfigPath
+    $lock = Open-RepoFlowStateLock -StatePath $statePath
+
+    try {
+        $document = Read-RepoFlowStateDocument -ConfigPath $ConfigPath
+
+        if ($null -eq $document) {
+            $document = New-RepoFlowStateDocument
+        }
+
+        $updatedDocument = & $Update $document
+
+        if ($null -eq $updatedDocument) {
+            $updatedDocument = $document
+        }
+
+        Write-RepoFlowStateDocument `
+            -ConfigPath $ConfigPath `
+            -Document $updatedDocument
+
+        return $updatedDocument
+    }
+    finally {
+        if ($null -ne $lock) {
+            $lock.Dispose()
+        }
+    }
+}
+
+function Remove-RepoFlowStateFileIfEmpty {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ConfigPath
+    )
+
+    $statePath = Get-RepoFlowStatePath -ConfigPath $ConfigPath
+
+    if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
+        return $false
+    }
+
+    $lock = Open-RepoFlowStateLock -StatePath $statePath
+
+    try {
+        $document = Read-RepoFlowStateDocument -ConfigPath $ConfigPath
+
+        if (
+            $null -ne $document -and
+            [string]::IsNullOrWhiteSpace([string]$document.activeRepository) -and
+            @($document.runs).Count -eq 0
+        ) {
+            Remove-Item -LiteralPath $statePath -Force
+            return $true
+        }
+
+        return $false
+    }
+    finally {
+        if ($null -ne $lock) {
+            $lock.Dispose()
+        }
+    }
+}
+
 function Read-RepoFlowRepositoryState {
     [CmdletBinding()]
     param(
@@ -64,37 +333,16 @@ function Read-RepoFlowRepositoryState {
         [string]$ConfigPath
     )
 
-    $statePath = Get-RepoFlowRepositoryStatePath -ConfigPath $ConfigPath
+    $statePath = Get-RepoFlowStatePath -ConfigPath $ConfigPath
+    $state = Read-RepoFlowStateDocument -ConfigPath $ConfigPath
 
-    if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
+    if ($null -eq $state -or [string]::IsNullOrWhiteSpace([string]$state.activeRepository)) {
         return $null
     }
 
-    try {
-        $state = Get-Content -LiteralPath $statePath -Raw |
-            ConvertFrom-Json -ErrorAction Stop
-    }
-    catch {
-        throw "RepoFlow repository state contains invalid JSON: $statePath"
-    }
-
-    Assert-RepoFlowAllowedProperties `
-        -Object $state `
-        -Allowed @('activeRepository') `
-        -Path '$'
-
-    $activeRepository = Get-RepoFlowProperty `
-        -Object $state `
-        -Name 'activeRepository' `
-        -Default $null
-
-    Assert-RepoFlowString `
-        -Value $activeRepository `
-        -Path '$.activeRepository'
-
     return [pscustomobject]@{
         Path = $statePath
-        ActiveRepository = [string]$activeRepository
+        ActiveRepository = [string]$state.activeRepository
     }
 }
 
@@ -521,14 +769,13 @@ function Write-RepoFlowActiveRepository {
         [string]$RepositoryName
     )
 
-    $statePath = Get-RepoFlowRepositoryStatePath -ConfigPath $ConfigPath
-    $state = [pscustomobject][ordered]@{
-        activeRepository = $RepositoryName
-    }
+    $statePath = Get-RepoFlowStatePath -ConfigPath $ConfigPath
+    Invoke-RepoFlowStateMutation -ConfigPath $ConfigPath -Update {
+        param($document)
 
-    $state |
-        ConvertTo-Json |
-        Set-Content -LiteralPath $statePath -Encoding utf8NoBOM
+        $document.activeRepository = $RepositoryName
+        return $document
+    } | Out-Null
 
     return $statePath
 }
@@ -540,14 +787,22 @@ function Remove-RepoFlowActiveRepository {
         [string]$ConfigPath
     )
 
-    $statePath = Get-RepoFlowRepositoryStatePath -ConfigPath $ConfigPath
+    $statePath = Get-RepoFlowStatePath -ConfigPath $ConfigPath
 
-    if (Test-Path -LiteralPath $statePath -PathType Leaf) {
-        Remove-Item -LiteralPath $statePath -Force
-        return $true
+    if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
+        return $false
     }
 
-    return $false
+    $document = Invoke-RepoFlowStateMutation -ConfigPath $ConfigPath -Update {
+        param($state)
+
+        $state.activeRepository = $null
+        return $state
+    }
+
+    Remove-RepoFlowStateFileIfEmpty -ConfigPath $ConfigPath | Out-Null
+
+    return $true
 }
 
 function Invoke-RepoFlowRepositoryListWorkflow {

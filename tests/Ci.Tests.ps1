@@ -5,6 +5,52 @@ BeforeDiscovery {
 
 Describe 'RepoFlow CI state handling' {
     InModuleScope RepoFlow {
+        It 'extracts and deduplicates GitHub Actions run and job identifiers from check links' {
+            $identifiers = Get-RepoFlowCiIdentifiersFromChecks -Checks @(
+                [pscustomobject]@{
+                    link = 'https://github.com/owner/repository/actions/runs/300/jobs/900'
+                }
+                [pscustomobject]@{
+                    link = 'https://github.com/owner/repository/actions/runs/300/jobs/900'
+                }
+                [pscustomobject]@{
+                    link = 'https://github.com/owner/repository/actions/runs/400'
+                }
+                [pscustomobject]@{
+                    link = 'https://github.com/owner/repository/actions/runs/500/jobs/901?pr=1'
+                }
+                [pscustomobject]@{
+                    link = ''
+                }
+                [pscustomobject]@{
+                    link = $null
+                }
+                [pscustomobject]@{
+                    link = 'https://example.test/not-github-actions'
+                }
+            )
+
+            $identifiers.RunIds | Should -Be @('300', '400', '500')
+            $identifiers.JobIds | Should -Be @('900', '901')
+        }
+
+        It 'returns empty CI identifier arrays when checks have no GitHub Actions links' {
+            $identifiers = Get-RepoFlowCiIdentifiersFromChecks -Checks @(
+                [pscustomobject]@{
+                    link = ''
+                }
+                [pscustomobject]@{
+                    link = $null
+                }
+                [pscustomobject]@{
+                    link = 'https://example.test/no-actions-here'
+                }
+            )
+
+            @($identifiers.RunIds).Count | Should -Be 0
+            @($identifiers.JobIds).Count | Should -Be 0
+        }
+
         It 'keeps the overall state pending while any check is pending' {
             Mock Invoke-RepoFlowCommand {
                 [pscustomobject]@{

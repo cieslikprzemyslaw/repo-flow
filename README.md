@@ -256,7 +256,8 @@ Repository selection uses this order:
 5. the legacy `repository` object.
 
 The active selection is stored locally in `.repo-flow.state.json` beside the
-configuration file. It is ignored by Git and contains only the selected name.
+configuration file. It is ignored by Git and stores the selected repository
+name plus persisted local workflow run records.
 
 ```powershell
 rf repo list
@@ -267,6 +268,15 @@ rf repo reset -Apply
 
 rf issue run -Number 12 -Repo repo-flow -Apply
 rf pr status -Number 12 -Repo repo-flow
+```
+
+Persisted run records can be inspected and pruned locally:
+
+```powershell
+rf run list
+rf run show -RunId <id>
+rf run complete -RunId <id> -Apply
+rf run prune -Apply
 ```
 
 The named `-Repo` form remains supported for scripts and one-run repository overrides.

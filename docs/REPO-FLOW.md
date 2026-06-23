@@ -132,7 +132,7 @@ When an agent stops after modifying files, preserve the current working tree and
 
 `-Resume` is intentionally restricted to `issue continue`. RepoFlow requires the issue branch to already be checked out, requires uncommitted changes, rejects active merge/rebase/cherry-pick/revert operations, and verifies that local `HEAD` still matches the remote branch. It does not switch branches, pull, reset, restore, or stash.
 
-Before each review-feedback agent run, RepoFlow writes a checkpoint under `.git/repo-flow/agent-run.json`. Failed runs are marked as interrupted. A first resume after upgrading can explicitly adopt existing changes even when no earlier checkpoint exists, after the branch and remote-head checks pass.
+RepoFlow persists local workflow run checkpoints in `.repo-flow.state.json` beside the configuration file. Failed runs are marked as paused with the last safe phase retained for inspection and resume decisions. A first resume after upgrading can explicitly adopt existing changes even when no earlier checkpoint exists, after the branch and remote-head checks pass.
 
 ### Pull requests
 

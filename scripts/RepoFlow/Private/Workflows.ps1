@@ -64,6 +64,8 @@ function Invoke-RepoFlowIssueRunWorkflow {
 
     $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo -RequireGitHub -RequireAgent:$Apply
     $config = $context.Config
+    $stateConfigPath = [string]$context.RepositorySelection.Registry.ConfigPath
+    $repositoryName = [string]$context.RepositorySelection.Repository.name
     $repository = [string]$config.repository.slug
     $issue = Get-RepoFlowIssue -Number $Number -Repository $repository
     Assert-RepoFlowIssueReady -Issue $issue -Repository $repository
@@ -108,11 +110,33 @@ function Invoke-RepoFlowIssueRunWorkflow {
         'repo-flow-agent-final-{0}.md' -f [guid]::NewGuid().ToString('N')
     )
 
+    $runRecord = $null
+
     try {
         $prompt = New-RepoFlowInitialPrompt -Issue $issue -Config $config
         $scopeLength = ([string]$issue.body).Length
         Write-Host "[AGENT] Scope source: issue #$($issue.number) body ($scopeLength characters)."
         Write-Host '[AGENT] Implementing issue...'
+
+        $runRecord = Start-RepoFlowRunRecord `
+            -ConfigPath $stateConfigPath `
+            -RepositoryRoot $context.RepositoryRoot `
+            -Repository $repositoryName `
+            -RepositorySlug $repository `
+            -Operation 'issue-run' `
+            -IssueNumber $Number `
+            -Branch $branchName `
+            -BaseSha (Get-RepoFlowCommitHash) `
+            -HeadSha (Get-RepoFlowCommitHash) `
+            -Phase 'branch-created' `
+            -Provider ([string]$config.agent.provider) `
+            -Model ([string]$config.agent.model)
+
+        Set-RepoFlowRunCheckpoint `
+            -ConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -CurrentPhase 'issue-agent-running'
+
         $result = Invoke-RepoFlowAgent `
             -RepositoryRoot $context.RepositoryRoot `
             -Prompt $prompt `
@@ -149,6 +173,11 @@ function Invoke-RepoFlowIssueRunWorkflow {
                 $branchName
             ) | Out-Null
 
+            Complete-RepoFlowRunRecord `
+                -ConfigPath $stateConfigPath `
+                -RunId ([string]$runRecord.runId) `
+                -Outcome 'abandoned'
+
             throw 'Agent completed without changing files.'
         }
 
@@ -163,8 +192,23 @@ function Invoke-RepoFlowIssueRunWorkflow {
             -Message $commitMessage `
             -RepositoryRoot $context.RepositoryRoot `
             -Config $config
+
+        Set-RepoFlowRunCheckpoint `
+            -ConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -CurrentPhase 'changes-committed' `
+            -SafePhase 'changes-committed' `
+            -HeadSha (Get-RepoFlowCommitHash)
+
         Write-Host '[GIT] Pushing branch...'
         Push-RepoFlowBranch -Branch $branchName -SetUpstream
+
+        Set-RepoFlowRunCheckpoint `
+            -ConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -CurrentPhase 'branch-pushed' `
+            -SafePhase 'branch-pushed' `
+            -HeadSha (Get-RepoFlowCommitHash)
 
         $templatePath = Resolve-RepoFlowPath `
             -RepositoryRoot $context.RepositoryRoot `
@@ -191,12 +235,36 @@ function Invoke-RepoFlowIssueRunWorkflow {
             -Draft:([bool]$config.pullRequest.createDraft)
 
         Write-Host "[GH] PR: $($pullRequest.url)"
-        Invoke-RepoFlowCiPolicy `
+
+        Set-RepoFlowRunCheckpoint `
+            -ConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -CurrentPhase 'pull-request-created' `
+            -SafePhase 'pull-request-created' `
+            -PullRequestNumber ([int]$pullRequest.number) `
+            -HeadSha (Get-RepoFlowCommitHash)
+
+        $ciState = Invoke-RepoFlowCiPolicy `
             -Issue $issue `
             -PullRequest $pullRequest `
             -RepositoryRoot $context.RepositoryRoot `
             -Config $config `
-            -Mode $effectiveCiMode | Out-Null
+            -Mode $effectiveCiMode
+
+        $ciIdentifiers = Get-RepoFlowCiIdentifiersFromChecks -Checks $ciState.Checks
+        Set-RepoFlowRunCheckpoint `
+            -ConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -CurrentPhase "ci-$($ciState.Status)" `
+            -SafePhase "ci-$($ciState.Status)" `
+            -CiRunIds @($ciIdentifiers.RunIds) `
+            -CiJobIds @($ciIdentifiers.JobIds) `
+            -HeadSha (Get-RepoFlowCommitHash)
+
+        Complete-RepoFlowRunRecord `
+            -ConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -Outcome 'completed'
 
         $commitHash = Get-RepoFlowShortCommitHash
         Write-Host ''
@@ -204,6 +272,22 @@ function Invoke-RepoFlowIssueRunWorkflow {
         Write-Host "Branch: $branchName"
         Write-Host "Commit: $commitHash"
         Write-Host "PR:     $($pullRequest.url)"
+    }
+    catch {
+        if ($null -ne $runRecord) {
+            $latestRunRecord = Get-RepoFlowRunRecord `
+                -ConfigPath $stateConfigPath `
+                -RunId ([string]$runRecord.runId)
+
+            if ([string]::IsNullOrWhiteSpace([string]$latestRunRecord.terminalOutcome)) {
+                Set-RepoFlowRunPaused `
+                    -ConfigPath $stateConfigPath `
+                    -RunId ([string]$runRecord.runId) `
+                    -PauseReason $_.Exception.Message
+            }
+        }
+
+        throw
     }
     finally {
         Remove-Item -LiteralPath $finalMessagePath -Force -ErrorAction SilentlyContinue
@@ -233,6 +317,8 @@ function Invoke-RepoFlowIssueContinueWorkflow {
 
     $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo -RequireGitHub -RequireAgent:$Apply
     $config = $context.Config
+    $stateConfigPath = [string]$context.RepositorySelection.Registry.ConfigPath
+    $repositoryName = [string]$context.RepositorySelection.Repository.name
     $repository = [string]$config.repository.slug
     $issue = Get-RepoFlowIssue -Number $Number -Repository $repository
     Assert-RepoFlowIssueReady -Issue $issue -Repository $repository
@@ -298,8 +384,9 @@ function Invoke-RepoFlowIssueContinueWorkflow {
 
     if ($Resume) {
         Assert-RepoFlowReviewResumeAllowed `
+            -ConfigPath $stateConfigPath `
             -RepositoryRoot $context.RepositoryRoot `
-            -Repository $repository `
+            -Repository $repositoryName `
             -Branch $branchName `
             -IssueNumber $Number `
             -PullRequestNumber ([int]$pullRequest.number) `
@@ -322,13 +409,13 @@ function Invoke-RepoFlowIssueContinueWorkflow {
         }
 
         Switch-RepoFlowExistingBranch -Branch $branchName
-        Remove-RepoFlowAgentRunState `
-            -RepositoryRoot $context.RepositoryRoot
     }
 
     $finalMessagePath = Join-Path ([System.IO.Path]::GetTempPath()) (
         'repo-flow-review-final-{0}.md' -f [guid]::NewGuid().ToString('N')
     )
+
+    $runRecord = $null
 
     try {
         $prompt = New-RepoFlowReviewPrompt `
@@ -348,14 +435,20 @@ function Invoke-RepoFlowIssueContinueWorkflow {
         }
 
         Start-RepoFlowReviewAgentRunState `
+            -ConfigPath $stateConfigPath `
             -RepositoryRoot $context.RepositoryRoot `
-            -Repository $repository `
+            -Repository $repositoryName `
+            -RepositorySlug $repository `
             -Branch $branchName `
             -IssueNumber $Number `
             -PullRequestNumber ([int]$pullRequest.number) `
             -PrCommentId ([long]$comment.id) `
             -Config $config `
             -AdoptedExistingChanges:$Resume | Out-Null
+
+        $runRecord = Read-RepoFlowAgentRunState `
+            -ConfigPath $stateConfigPath `
+            -RepositoryRoot $context.RepositoryRoot
 
         try {
             $result = Invoke-RepoFlowAgent `
@@ -366,6 +459,7 @@ function Invoke-RepoFlowIssueContinueWorkflow {
         }
         catch {
             Set-RepoFlowAgentRunInterrupted `
+                -ConfigPath $stateConfigPath `
                 -RepositoryRoot $context.RepositoryRoot `
                 -ErrorMessage $_.Exception.Message
             throw
@@ -373,13 +467,11 @@ function Invoke-RepoFlowIssueContinueWorkflow {
 
         if ($result.ExitCode -ne 0) {
             Set-RepoFlowAgentRunInterrupted `
+                -ConfigPath $stateConfigPath `
                 -RepositoryRoot $context.RepositoryRoot `
                 -ErrorMessage $result.Text
             throw "Agent failed:$([Environment]::NewLine)$($result.Text)"
         }
-
-        Remove-RepoFlowAgentRunState `
-            -RepositoryRoot $context.RepositoryRoot
 
         $summary = Get-RepoFlowAgentFinalMessage -Path $finalMessagePath
         $changes = Get-RepoFlowWorkingTreeStatus
@@ -396,6 +488,10 @@ function Invoke-RepoFlowIssueContinueWorkflow {
             }
 
             Write-Host 'No commit was created.'
+            Complete-RepoFlowRunRecord `
+                -ConfigPath $stateConfigPath `
+                -RunId ([string]$runRecord.runId) `
+                -Outcome 'abandoned'
             return
         }
 
@@ -410,6 +506,14 @@ function Invoke-RepoFlowIssueContinueWorkflow {
             -Message $commitMessage `
             -RepositoryRoot $context.RepositoryRoot `
             -Config $config
+
+        Set-RepoFlowRunCheckpoint `
+            -ConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -CurrentPhase 'review-committed' `
+            -SafePhase 'review-committed' `
+            -HeadSha (Get-RepoFlowCommitHash)
+
         Write-Host '[GIT] Pushing review changes...'
         Push-RepoFlowBranch -Branch $branchName
 
@@ -422,17 +526,56 @@ function Invoke-RepoFlowIssueContinueWorkflow {
             -TimeoutSeconds ([int]$config.ci.timeoutSeconds) `
             -PollSeconds ([int]$config.ci.pollSeconds)
 
-        Invoke-RepoFlowCiPolicy `
+        Set-RepoFlowRunCheckpoint `
+            -ConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -CurrentPhase 'review-pushed' `
+            -SafePhase 'review-pushed' `
+            -HeadSha $expectedHeadSha `
+            -PullRequestNumber ([int]$pullRequest.number)
+
+        $ciState = Invoke-RepoFlowCiPolicy `
             -Issue $issue `
             -PullRequest $pullRequest `
             -RepositoryRoot $context.RepositoryRoot `
             -Config $config `
-            -Mode $effectiveCiMode | Out-Null
+            -Mode $effectiveCiMode
+
+        $ciIdentifiers = Get-RepoFlowCiIdentifiersFromChecks -Checks $ciState.Checks
+        Set-RepoFlowRunCheckpoint `
+            -ConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -CurrentPhase "ci-$($ciState.Status)" `
+            -SafePhase "ci-$($ciState.Status)" `
+            -CiRunIds @($ciIdentifiers.RunIds) `
+            -CiJobIds @($ciIdentifiers.JobIds) `
+            -HeadSha $expectedHeadSha
+
+        Complete-RepoFlowRunRecord `
+            -ConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -Outcome 'completed'
 
         Write-Host ''
         Write-Host 'Review feedback completed.'
         Write-Host "Commit: $(Get-RepoFlowShortCommitHash)"
         Write-Host "PR:     $($pullRequest.url)"
+    }
+    catch {
+        if ($null -ne $runRecord) {
+            $latestRunRecord = Get-RepoFlowRunRecord `
+                -ConfigPath $stateConfigPath `
+                -RunId ([string]$runRecord.runId)
+
+            if ([string]::IsNullOrWhiteSpace([string]$latestRunRecord.terminalOutcome)) {
+                Set-RepoFlowRunPaused `
+                    -ConfigPath $stateConfigPath `
+                    -RunId ([string]$runRecord.runId) `
+                    -PauseReason $_.Exception.Message
+            }
+        }
+
+        throw
     }
     finally {
         Remove-Item -LiteralPath $finalMessagePath -Force -ErrorAction SilentlyContinue

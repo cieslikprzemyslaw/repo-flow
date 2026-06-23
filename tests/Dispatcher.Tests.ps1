@@ -29,6 +29,18 @@ Describe 'RepoFlow command dispatcher' {
             Should -Invoke Invoke-RepoFlowPrRepairWorkflow -Times 1 -Exactly
         }
 
+        It 'routes run show commands' {
+            Mock Invoke-RepoFlowRunShowWorkflow { return }
+            Invoke-RepoFlow -Area run -Action show -RunId run-123
+            Should -Invoke Invoke-RepoFlowRunShowWorkflow -Times 1 -Exactly
+        }
+
+        It 'requires a run id for run show' {
+            {
+                Invoke-RepoFlow -Area run -Action show
+            } | Should -Throw '*requires -RunId*'
+        }
+
         It 'routes pr accept as a merge alias' {
             Mock Invoke-RepoFlowPrMergeWorkflow { return }
             Invoke-RepoFlow -Area pr -Action accept -Number 116

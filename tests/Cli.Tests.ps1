@@ -19,6 +19,7 @@ Describe 'RepoFlow CLI parser' {
         $result | Should -Match 'rf --version'
         $result | Should -Match '(?m)^Commands:\r?$'
         $result | Should -Match '(?m)^  -Apply\r?$'
+        $result | Should -Match 'run list'
         $result |
             Should -Match '(?m)^  -CiMode skip\|observe\|require-passing\r?$'
     }
@@ -46,11 +47,16 @@ Describe 'RepoFlow CLI parser' {
         $futureRepairHelp = Invoke-RepoFlowCli `
             -Arguments @('pr', 'repair', '--help') `
             -RepositoryRoot $script:TestRepositoryRoot
+        $runHelp = Invoke-RepoFlowCli `
+            -Arguments @('run', 'show', '--help') `
+            -RepositoryRoot $script:TestRepositoryRoot
 
         $areaHelp | Should -Match 'RepoFlow issue commands'
         $actionHelp | Should -Match 'Implements a GitHub issue'
         $futureRepairHelp | Should -Match 'pr repair'
         $futureRepairHelp | Should -Match 'Repairs a failed, open pull request'
+        $runHelp | Should -Match 'run show'
+        $runHelp | Should -Match 'persisted workflow run record'
     }
 
     It 'prints the module version without loading configuration' {
@@ -138,6 +144,34 @@ Describe 'RepoFlow CLI parser' {
                 $Area -eq 'repo' -and
                 $Action -eq 'use' -and
                 $Repo -eq 'repo-flow' -and
+                $Apply -eq $true
+            }
+    }
+
+    It 'maps run options to Invoke-RepoFlow' {
+        Mock -CommandName Invoke-RepoFlow -ModuleName RepoFlow
+
+        Invoke-RepoFlowCli `
+            -Arguments @(
+                'run'
+                'complete'
+                '-RunId'
+                'run-123'
+                '-Outcome'
+                'abandoned'
+                '-Apply'
+            ) `
+            -RepositoryRoot $script:TestRepositoryRoot
+
+        Should -Invoke -CommandName Invoke-RepoFlow `
+            -ModuleName RepoFlow `
+            -Times 1 `
+            -Exactly `
+            -ParameterFilter {
+                $Area -eq 'run' -and
+                $Action -eq 'complete' -and
+                $RunId -eq 'run-123' -and
+                $Outcome -eq 'abandoned' -and
                 $Apply -eq $true
             }
     }

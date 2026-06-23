@@ -40,6 +40,8 @@ function Invoke-RepoFlowPrRepairWorkflow {
 
     $context = New-RepoFlowContext -ConfigPath $ConfigPath -Repo $Repo -RequireGitHub -RequireAgent:$Apply
     $config = $context.Config
+    $stateConfigPath = [string]$context.RepositorySelection.Registry.ConfigPath
+    $repositoryName = [string]$context.RepositorySelection.Repository.name
     $repository = [string]$config.repository.slug
     $attemptLimit = [int]$config.ci.autoFixAttempts
     $pullRequest = Get-RepoFlowPullRequest -Number $Number -Repository $repository
@@ -174,7 +176,24 @@ function Invoke-RepoFlowPrRepairWorkflow {
             'repo-flow-pr-repair-final-{0}.md' -f [guid]::NewGuid().ToString('N')
         )
 
+        $runRecord = $null
+
         try {
+            $runRecord = Start-RepoFlowRunRecord `
+                -ConfigPath $stateConfigPath `
+                -RepositoryRoot $context.RepositoryRoot `
+                -Repository $repositoryName `
+                -RepositorySlug $repository `
+                -Operation 'pr-repair' `
+                -IssueNumber ([int]$issue.number) `
+                -Branch ([string]$pullRequest.headRefName) `
+                -PullRequestNumber $Number `
+                -BaseSha $expectedHeadSha `
+                -HeadSha $expectedHeadSha `
+                -Phase 'repair-started' `
+                -Provider ([string]$config.agent.provider) `
+                -Model ([string]$config.agent.model)
+
             for ($attempt = 1; $attempt -le $attemptLimit; $attempt++) {
                 $changedFiles = Get-RepoFlowPullRequestChangedFiles `
                     -BaseBranch ([string]$config.repository.baseBranch)
@@ -203,6 +222,12 @@ function Invoke-RepoFlowPrRepairWorkflow {
                     -RepairAttemptLimit $attemptLimit
 
                 Write-Host "[AGENT] Repair attempt $attempt of $attemptLimit..."
+
+                Set-RepoFlowRunCheckpoint `
+                    -ConfigPath $stateConfigPath `
+                    -RunId ([string]$runRecord.runId) `
+                    -CurrentPhase "repair-agent-attempt-$attempt" `
+                    -RepairAttemptCount $attempt
 
                 $result = Invoke-RepoFlowAgent `
                     -RepositoryRoot $context.RepositoryRoot `
@@ -258,6 +283,14 @@ function Invoke-RepoFlowPrRepairWorkflow {
                             Out-Null
                     }
 
+                Set-RepoFlowRunCheckpoint `
+                    -ConfigPath $stateConfigPath `
+                    -RunId ([string]$runRecord.runId) `
+                    -CurrentPhase "repair-committed-$attempt" `
+                    -SafePhase "repair-committed-$attempt" `
+                    -HeadSha (Get-RepoFlowCommitHash) `
+                    -RepairAttemptCount $attempt
+
                 Write-Host '[GIT] Pushing repair changes...'
                 Push-RepoFlowBranch -Branch ([string]$pullRequest.headRefName)
 
@@ -269,13 +302,38 @@ function Invoke-RepoFlowPrRepairWorkflow {
                     -TimeoutSeconds ([int]$config.ci.timeoutSeconds) `
                     -PollSeconds ([int]$config.ci.pollSeconds)
 
+                Set-RepoFlowRunCheckpoint `
+                    -ConfigPath $stateConfigPath `
+                    -RunId ([string]$runRecord.runId) `
+                    -CurrentPhase "repair-pushed-$attempt" `
+                    -SafePhase "repair-pushed-$attempt" `
+                    -HeadSha $expectedHeadSha `
+                    -PullRequestNumber $Number `
+                    -RepairAttemptCount $attempt
+
                 $checks = Wait-RepoFlowPrChecks `
                     -PullRequestNumber $Number `
                     -Repository $repository `
                     -TimeoutSeconds ([int]$config.ci.timeoutSeconds) `
                     -PollSeconds ([int]$config.ci.pollSeconds)
 
+                $ciIdentifiers = Get-RepoFlowCiIdentifiersFromChecks -Checks $checks.Checks
+                Set-RepoFlowRunCheckpoint `
+                    -ConfigPath $stateConfigPath `
+                    -RunId ([string]$runRecord.runId) `
+                    -CurrentPhase "ci-$($checks.Status)" `
+                    -SafePhase "ci-$($checks.Status)" `
+                    -HeadSha $expectedHeadSha `
+                    -CiRunIds @($ciIdentifiers.RunIds) `
+                    -CiJobIds @($ciIdentifiers.JobIds) `
+                    -RepairAttemptCount $attempt
+
                 if ($checks.Status -eq 'passed') {
+                    Complete-RepoFlowRunRecord `
+                        -ConfigPath $stateConfigPath `
+                        -RunId ([string]$runRecord.runId) `
+                        -Outcome 'completed'
+
                     Write-Host ''
                     Write-Host "Pull request #$Number repair completed."
                     Write-Host "Commit: $(Get-RepoFlowShortCommitHash)"
@@ -299,6 +357,22 @@ function Invoke-RepoFlowPrRepairWorkflow {
                 "CI did not pass for pull request #$Number after " +
                 "$attemptLimit repair attempt(s)."
             )
+        }
+        catch {
+            if ($null -ne $runRecord) {
+                $latestRunRecord = Get-RepoFlowRunRecord `
+                    -ConfigPath $stateConfigPath `
+                    -RunId ([string]$runRecord.runId)
+
+                if ([string]::IsNullOrWhiteSpace([string]$latestRunRecord.terminalOutcome)) {
+                    Set-RepoFlowRunPaused `
+                        -ConfigPath $stateConfigPath `
+                        -RunId ([string]$runRecord.runId) `
+                        -PauseReason $_.Exception.Message
+                }
+            }
+
+            throw
         }
         finally {
             Remove-Item -LiteralPath $finalMessagePath -Force -ErrorAction SilentlyContinue

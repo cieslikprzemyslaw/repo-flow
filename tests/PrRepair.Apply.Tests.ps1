@@ -84,8 +84,14 @@ Describe 'RepoFlow PR repair apply workflow' {
                 [pscustomobject]@{
                     RepositoryRoot = 'C:\repo'
                     Config = $script:config
-                    RepositorySelection = $null
-                }
+                    RepositorySelection = [pscustomobject]@{
+                        Registry = [pscustomobject]@{
+                            ConfigPath = (Join-Path $TestDrive '.repo-flow.json')
+                        }
+                        Repository = [pscustomobject]@{
+                            name = 'repo'
+                        }
+                    }                }
             }
             Mock Get-RepoFlowPullRequest { $script:initialPullRequest }
             Mock Get-RepoFlowPullRequestIssueNumber { 22 }
@@ -159,8 +165,14 @@ Describe 'RepoFlow PR repair apply workflow' {
                 [pscustomobject]@{
                     RepositoryRoot = 'C:\repo'
                     Config = $script:config
-                    RepositorySelection = $null
-                }
+                    RepositorySelection = [pscustomobject]@{
+                        Registry = [pscustomobject]@{
+                            ConfigPath = (Join-Path $TestDrive '.repo-flow.json')
+                        }
+                        Repository = [pscustomobject]@{
+                            name = 'repo'
+                        }
+                    }                }
             }
             Mock Get-RepoFlowPullRequest { $script:initialPullRequest }
             Mock Get-RepoFlowPullRequestIssueNumber { 22 }
@@ -229,8 +241,14 @@ Describe 'RepoFlow PR repair apply workflow' {
                 [pscustomobject]@{
                     RepositoryRoot = 'C:\repo'
                     Config = $script:config
-                    RepositorySelection = $null
-                }
+                    RepositorySelection = [pscustomobject]@{
+                        Registry = [pscustomobject]@{
+                            ConfigPath = (Join-Path $TestDrive '.repo-flow.json')
+                        }
+                        Repository = [pscustomobject]@{
+                            name = 'repo'
+                        }
+                    }                }
             }
             Mock Get-RepoFlowPullRequestIssueNumber { 22 }
             Mock Get-RepoFlowIssue { $script:issue }
@@ -369,6 +387,7 @@ Describe 'RepoFlow PR repair apply workflow' {
                 switch ($script:commitHashCalls) {
                     1 { return ('a' * 40) }
                     2 { return ('b' * 40) }
+                    3 { return ('b' * 40) }
                     default { return ('c' * 40) }
                 }
             }
@@ -392,8 +411,14 @@ Describe 'RepoFlow PR repair apply workflow' {
                 [pscustomobject]@{
                     RepositoryRoot = 'C:\repo'
                     Config = $script:config
-                    RepositorySelection = $null
-                }
+                    RepositorySelection = [pscustomobject]@{
+                        Registry = [pscustomobject]@{
+                            ConfigPath = (Join-Path $TestDrive '.repo-flow.json')
+                        }
+                        Repository = [pscustomobject]@{
+                            name = 'repo'
+                        }
+                    }                }
             }
             Mock Get-RepoFlowPullRequestIssueNumber { 22 }
             Mock Get-RepoFlowIssue { $script:issue }
