@@ -249,7 +249,7 @@ function Invoke-RepoFlow {
         default {
             throw (
                 "Unsupported RepoFlow command: {0} {1}. " +
-                "Run '.\repo-flow.ps1 help' to see available commands."
+                "Run 'rf --help' to see available commands."
             ) -f $Area, $Action
         }
     }

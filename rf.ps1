@@ -1,17 +1,12 @@
 <#
 .SYNOPSIS
-Runs RepoFlow Git, GitHub, CI, and coding-agent workflows.
-
-.DESCRIPTION
-This is the backward-compatible RepoFlow launcher. It forwards raw CLI
-arguments to the shared Invoke-RepoFlowCli parser so standard flags such as
--h, --help, and --version work consistently.
+Runs RepoFlow through the recommended short rf command.
 
 .EXAMPLE
-.\repo-flow.ps1 --help
+.\rf.ps1 --help
 
 .EXAMPLE
-.\repo-flow.ps1 issue run -Number 67 -Apply
+.\rf.ps1 issue run -Number 67 -Apply
 #>
 
 Set-StrictMode -Version Latest

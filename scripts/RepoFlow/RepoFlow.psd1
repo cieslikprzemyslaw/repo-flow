@@ -7,7 +7,7 @@
     Copyright = '(c) 2026 Przemyslaw Cieslik. All rights reserved.'
     Description = 'Local Git, GitHub, CI, and coding-agent workflow manager.'
     PowerShellVersion = '7.2'
-    FunctionsToExport = @('Invoke-RepoFlow')
+    FunctionsToExport = @('Invoke-RepoFlow', 'Invoke-RepoFlowCli')
     CmdletsToExport = @()
     VariablesToExport = @()
     AliasesToExport = @()

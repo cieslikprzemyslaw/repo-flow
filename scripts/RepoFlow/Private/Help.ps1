@@ -19,8 +19,14 @@ function Get-RepoFlowHelpText {
 RepoFlow
 
 Usage:
-  .\repo-flow.ps1 <area> <action> [options]
-  .\repo-flow.ps1 help [topic]
+  rf <area> <action> [options]
+  rf help [topic]
+  rf -h | --help
+  rf --version
+
+Launchers:
+  rf is the recommended short command.
+  repo-flow and repo-flow.ps1 remain backward-compatible entrypoints.
 
 Commands:
   issue sync
@@ -75,6 +81,8 @@ Safety:
   PR merge always requires explicit manual-review confirmation.
 
 Common options:
+  -h, --help
+  --version
   -Number <number>
   -Apply
   -CiMode skip|observe|require-passing
@@ -85,14 +93,14 @@ Aliases:
   -IssueNumber and -PrNumber are aliases for -Number.
   -Run is an alias for -Apply.
   -Repository and -RepositoryName are aliases for -Repo.
-  'pr accept' is an alias for 'pr merge'.
+  pr accept is an alias for pr merge.
 
 Help examples:
-  .\repo-flow.ps1 help issue
-  .\repo-flow.ps1 help "issue run"
-  .\repo-flow.ps1 help pr
-  .\repo-flow.ps1 help "pr merge"
-  .\repo-flow.ps1 help "branch cleanup"
+  rf help issue
+  rf help "issue run"
+  rf help pr
+  rf help "pr merge"
+  rf help "branch cleanup"
 '@
         }
 
@@ -100,18 +108,18 @@ Help examples:
             return @'
 RepoFlow issue commands
 
-  .\repo-flow.ps1 issue sync
-  .\repo-flow.ps1 issue sync -Apply
+  rf issue sync
+  rf issue sync -Apply
 
-  .\repo-flow.ps1 issue run -Number <issue>
-  .\repo-flow.ps1 issue run -Number <issue> -Apply
+  rf issue run -Number <issue>
+  rf issue run -Number <issue> -Apply
 
-  .\repo-flow.ps1 issue continue -Number <issue> -LastPrComment
-  .\repo-flow.ps1 issue continue -Number <issue> -LastPrComment -Apply
+  rf issue continue -Number <issue> -LastPrComment
+  rf issue continue -Number <issue> -LastPrComment -Apply
 
-  .\repo-flow.ps1 issue continue -Number <issue> -PrCommentId <id>
-  .\repo-flow.ps1 issue continue -Number <issue> -PrCommentId <id> -Apply
-  .\repo-flow.ps1 issue continue -Number <issue> -PrCommentId <id> -Apply -Resume
+  rf issue continue -Number <issue> -PrCommentId <id>
+  rf issue continue -Number <issue> -PrCommentId <id> -Apply
+  rf issue continue -Number <issue> -PrCommentId <id> -Apply -Resume
 '@
         }
 
@@ -123,13 +131,13 @@ Synchronises GitHub labels, milestones, issue updates, and issue creation
 from issues-manifest.json.
 
 Plan:
-  .\repo-flow.ps1 issue sync
+  rf issue sync
 
 Apply:
-  .\repo-flow.ps1 issue sync -Apply
+  rf issue sync -Apply
 
 Skip new issue creation:
-  .\repo-flow.ps1 issue sync -Apply -SkipCreates
+  rf issue sync -Apply -SkipCreates
 '@
         }
 
@@ -140,13 +148,13 @@ issue run
 Implements a GitHub issue using the configured coding agent.
 
 Plan:
-  .\repo-flow.ps1 issue run -Number 67
+  rf issue run -Number 67
 
 Apply:
-  .\repo-flow.ps1 issue run -Number 67 -Apply
+  rf issue run -Number 67 -Apply
 
 Optional CI override:
-  .\repo-flow.ps1 issue run -Number 67 -Apply -CiMode observe
+  rf issue run -Number 67 -Apply -CiMode observe
 '@
         }
 
@@ -157,13 +165,13 @@ issue continue
 Continues an existing open pull request using trusted review feedback.
 
 Latest PR comment:
-  .\repo-flow.ps1 issue continue -Number 66 -LastPrComment -Apply
+  rf issue continue -Number 66 -LastPrComment -Apply
 
 Specific PR comment:
-  .\repo-flow.ps1 issue continue -Number 66 -PrCommentId 123456789 -Apply
+  rf issue continue -Number 66 -PrCommentId 123456789 -Apply
 
 Resume an interrupted agent run while preserving existing changes:
-  .\repo-flow.ps1 issue continue -Number 66 -PrCommentId 123456789 -Apply -Resume
+  rf issue continue -Number 66 -PrCommentId 123456789 -Apply -Resume
 
 -Resume requires the issue branch to be checked out, a dirty working tree,
 and local HEAD to match the remote branch. It never switches branches,
@@ -172,19 +180,23 @@ resets, restores, or stashes existing work.
 Use either -LastPrComment or -PrCommentId, not both.
 '@
         }
-
         'pr' {
             return @'
 RepoFlow pull-request commands
 
-  .\repo-flow.ps1 pr status -Number <pr>
-  .\repo-flow.ps1 pr watch -Number <pr>
-  .\repo-flow.ps1 pr ready -Number <pr> -Apply
-  .\repo-flow.ps1 pr merge -Number <pr> -Apply
+  rf pr status -Number <pr>
+  rf pr watch -Number <pr>
+  rf pr ready -Number <pr> -Apply
+  rf pr merge -Number <pr> -Apply
+  rf pr repair --help
 
-'pr accept' is an alias for 'pr merge'.
+pr repair is reserved for the explicit CI-repair workflow. The executable
+command is not implemented yet and will be delivered by a later issue.
+
+pr accept is an alias for pr merge.
 '@
         }
+
 
         'pr/status' {
             return @'
@@ -193,7 +205,7 @@ pr status
 Displays the pull-request state and current check results.
 
 Example:
-  .\repo-flow.ps1 pr status -Number 116
+  rf pr status -Number 116
 '@
         }
 
@@ -204,7 +216,7 @@ pr watch
 Waits for checks associated with the current pull-request head commit.
 
 Example:
-  .\repo-flow.ps1 pr watch -Number 116
+  rf pr watch -Number 116
 '@
         }
 
@@ -215,10 +227,10 @@ pr ready
 Validates a draft pull request and marks it ready for review.
 
 Plan:
-  .\repo-flow.ps1 pr ready -Number 116
+  rf pr ready -Number 116
 
 Apply:
-  .\repo-flow.ps1 pr ready -Number 116 -Apply
+  rf pr ready -Number 116 -Apply
 '@
         }
 
@@ -231,13 +243,13 @@ the application. RepoFlow waits for CI, then requires you to type MERGE before
 it marks a draft ready or performs any merge mutation.
 
 Plan:
-  .\repo-flow.ps1 pr merge -Number 116
+  rf pr merge -Number 116
 
 Apply:
-  .\repo-flow.ps1 pr merge -Number 116 -Apply
+  rf pr merge -Number 116 -Apply
 
 Alias:
-  .\repo-flow.ps1 pr accept -Number 116 -Apply
+  rf pr accept -Number 116 -Apply
 
 This command does not submit a GitHub review approval. It records your
 manual decision through an explicit terminal confirmation, then performs the
@@ -246,13 +258,26 @@ mechanical ready, merge, base-branch update, and optional branch cleanup steps.
 No issue, agent, or CI workflow invokes this command automatically.
 '@
         }
+        'pr/repair' {
+            return @'
+pr repair
+
+Displays help for the planned explicit CI-repair workflow.
+
+Usage:
+  rf pr repair -Number <pr> -Apply
+
+This command is reserved but not implemented in this version. A later issue
+will add the bounded repair workflow without changing this help route.
+'@
+        }
 
         'branch' {
             return @'
 RepoFlow branch commands
 
-  .\repo-flow.ps1 branch cleanup
-  .\repo-flow.ps1 branch cleanup -Apply
+  rf branch cleanup
+  rf branch cleanup -Apply
 '@
         }
 
@@ -263,10 +288,10 @@ branch cleanup
 Finds local branches whose pull requests are confirmed as merged.
 
 Plan:
-  .\repo-flow.ps1 branch cleanup
+  rf branch cleanup
 
 Delete safe merged branches:
-  .\repo-flow.ps1 branch cleanup -Apply
+  rf branch cleanup -Apply
 '@
         }
 
@@ -274,7 +299,7 @@ Delete safe merged branches:
             return @'
 RepoFlow CI commands
 
-  .\repo-flow.ps1 ci watch -Number <pr>
+  rf ci watch -Number <pr>
 '@
         }
 
@@ -285,7 +310,7 @@ ci watch
 Waits for GitHub checks associated with the current PR head commit.
 
 Example:
-  .\repo-flow.ps1 ci watch -Number 116
+  rf ci watch -Number 116
 '@
         }
 
@@ -293,13 +318,13 @@ Example:
             return @'
 RepoFlow repository commands
 
-  .\repo-flow.ps1 repo list
-  .\repo-flow.ps1 repo current
-  .\repo-flow.ps1 repo current -Repo <name>
-  .\repo-flow.ps1 repo use <name>
-  .\repo-flow.ps1 repo use <name> -Apply
-  .\repo-flow.ps1 repo reset
-  .\repo-flow.ps1 repo reset -Apply
+  rf repo list
+  rf repo current
+  rf repo current -Repo <name>
+  rf repo use <name>
+  rf repo use <name> -Apply
+  rf repo reset
+  rf repo reset -Apply
 
 Selection precedence:
 explicit -Repo
@@ -318,7 +343,7 @@ Displays every registered repository with default, active, current-directory,
 and legacy markers.
 
 Example:
-  .\repo-flow.ps1 repo list
+  rf repo list
 '@
         }
 
@@ -329,8 +354,8 @@ repo current
 Displays the effective selected repository and selection source.
 
 Examples:
-  .\repo-flow.ps1 repo current
-  .\repo-flow.ps1 repo current -Repo repo-flow
+  rf repo current
+  rf repo current -Repo repo-flow
 '@
         }
 
@@ -342,10 +367,10 @@ Stores an active repository selection beside .repo-flow.json.
 It does not change the shell working directory.
 
 Plan:
-  .\repo-flow.ps1 repo use repo-flow
+  rf repo use repo-flow
 
 Apply:
-  .\repo-flow.ps1 repo use repo-flow -Apply
+  rf repo use repo-flow -Apply
 '@
         }
 
@@ -356,10 +381,10 @@ repo reset
 Removes the stored active repository selection.
 
 Plan:
-  .\repo-flow.ps1 repo reset
+  rf repo reset
 
 Apply:
-  .\repo-flow.ps1 repo reset -Apply
+  rf repo reset -Apply
 '@
         }
 
@@ -367,8 +392,8 @@ Apply:
             return @'
 RepoFlow configuration commands
 
-  .\repo-flow.ps1 config validate
-  .\repo-flow.ps1 config show
+  rf config validate
+  rf config show
 
 The default configuration file is .repo-flow.json beside repo-flow.ps1.
 Use either legacy repository.localPath or defaultRepository with repositories[].
@@ -382,10 +407,10 @@ config validate
 Loads and validates .repo-flow.json before any repository mutation.
 
 Example:
-  .\repo-flow.ps1 config validate
+  rf config validate
 
 Custom configuration:
-  .\repo-flow.ps1 config validate -ConfigPath C:\configs\repo-flow.json
+  rf config validate -ConfigPath C:\configs\repo-flow.json
 '@
         }
 
@@ -396,14 +421,14 @@ config show
 Displays the effective non-sensitive RepoFlow configuration.
 
 Example:
-  .\repo-flow.ps1 config show
+  rf config show
 '@
         }
 
         default {
             throw (
                 "Unknown RepoFlow help topic: '{0}'. " +
-                "Run '.\repo-flow.ps1 help' to see available topics."
+                "Run 'rf --help' to see available topics."
             ) -f $Topic
         }
     }

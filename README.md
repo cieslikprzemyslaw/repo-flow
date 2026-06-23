@@ -82,6 +82,7 @@ Install-Module Pester -MinimumVersion 5.0 -Scope CurrentUser -Force
 ```text
 repo-flow/
 ├── repo-flow.ps1
+├── rf.ps1
 ├── test-repo-flow.ps1
 ├── repo-flow.example.json
 ├── .gitignore
@@ -139,8 +140,8 @@ Validate the installation:
 ```powershell
 Remove-Module RepoFlow -Force -ErrorAction SilentlyContinue
 .\test-repo-flow.ps1
-.\repo-flow.ps1 config validate
-.\repo-flow.ps1 config show
+.\rf.ps1 config validate
+.\rf.ps1 config show
 ```
 
 ## Configuration
@@ -258,14 +259,14 @@ The active selection is stored locally in `.repo-flow.state.json` beside the
 configuration file. It is ignored by Git and contains only the selected name.
 
 ```powershell
-repo-flow repo list
-repo-flow repo current
-repo-flow repo use repo-flow
-repo-flow repo use repo-flow -Apply
-repo-flow repo reset -Apply
+rf repo list
+rf repo current
+rf repo use repo-flow
+rf repo use repo-flow -Apply
+rf repo reset -Apply
 
-repo-flow issue run -Number 12 -Repo repo-flow -Apply
-repo-flow pr status -Number 12 -Repo repo-flow
+rf issue run -Number 12 -Repo repo-flow -Apply
+rf pr status -Number 12 -Repo repo-flow
 ```
 
 The named `-Repo` form remains supported for scripts and one-run repository overrides.
@@ -332,21 +333,33 @@ RepoFlow keeps agent context focused without weakening the issue boundary:
 
 ## Commands
 
-Show help:
+`rf` is the preferred short command. `repo-flow` and `repo-flow.ps1` remain
+supported for existing profiles and scripts.
+
+Standard CLI information:
 
 ```powershell
-.\repo-flow.ps1
-.\repo-flow.ps1 help
-.\repo-flow.ps1 help issue
-.\repo-flow.ps1 help "issue run"
-.\repo-flow.ps1 help "pr merge"
+rf -h
+rf --help
+rf --version
+rf issue -h
+rf issue run --help
+```
+
+Show help:
+```powershell
+rf
+rf help
+rf help issue
+rf help "issue run"
+rf help "pr merge"
 ```
 
 ### Configuration
 
 ```powershell
-.\repo-flow.ps1 config validate
-.\repo-flow.ps1 config show
+rf config validate
+rf config show
 ```
 
 ### Synchronise issues
@@ -354,19 +367,19 @@ Show help:
 Plan only:
 
 ```powershell
-.\repo-flow.ps1 issue sync
+rf issue sync
 ```
 
 Apply manifest changes:
 
 ```powershell
-.\repo-flow.ps1 issue sync -Apply
+rf issue sync -Apply
 ```
 
 Apply updates but skip new issue creation:
 
 ```powershell
-.\repo-flow.ps1 issue sync -Apply -SkipCreates
+rf issue sync -Apply -SkipCreates
 ```
 
 ### Implement an issue
@@ -374,21 +387,21 @@ Apply updates but skip new issue creation:
 Plan:
 
 ```powershell
-.\repo-flow.ps1 issue run -Number 67
+rf issue run -Number 67
 ```
 
 Run:
 
 ```powershell
-.\repo-flow.ps1 issue run -Number 67 -Apply
+rf issue run -Number 67 -Apply
 ```
 
 One-run CI override:
 
 ```powershell
-.\repo-flow.ps1 issue run -Number 67 -Apply -CiMode skip
-.\repo-flow.ps1 issue run -Number 67 -Apply -CiMode observe
-.\repo-flow.ps1 issue run -Number 67 -Apply -CiMode require-passing
+rf issue run -Number 67 -Apply -CiMode skip
+rf issue run -Number 67 -Apply -CiMode observe
+rf issue run -Number 67 -Apply -CiMode require-passing
 ```
 
 The workflow can:
@@ -410,7 +423,7 @@ It stops after CI. It does not merge.
 Use the newest trusted top-level PR comment:
 
 ```powershell
-.\repo-flow.ps1 issue continue `
+rf issue continue `
     -Number 67 `
     -LastPrComment `
     -Apply
@@ -419,7 +432,7 @@ Use the newest trusted top-level PR comment:
 Use a specific top-level PR comment:
 
 ```powershell
-.\repo-flow.ps1 issue continue `
+rf issue continue `
     -Number 67 `
     -PrCommentId 123456789 `
     -Apply
@@ -432,9 +445,9 @@ Inline review-thread comments are not currently supported. Add a top-level PR co
 ### Pull-request status and CI
 
 ```powershell
-.\repo-flow.ps1 pr status -Number 116
-.\repo-flow.ps1 pr watch -Number 116
-.\repo-flow.ps1 ci watch -Number 116
+rf pr status -Number 116
+rf pr watch -Number 116
+rf ci watch -Number 116
 ```
 
 ### Mark a PR ready
@@ -442,13 +455,13 @@ Inline review-thread comments are not currently supported. Add a top-level PR co
 Plan:
 
 ```powershell
-.\repo-flow.ps1 pr ready -Number 116
+rf pr ready -Number 116
 ```
 
 Apply:
 
 ```powershell
-.\repo-flow.ps1 pr ready -Number 116 -Apply
+rf pr ready -Number 116 -Apply
 ```
 
 ### Merge after manual review
@@ -458,19 +471,19 @@ First inspect and validate the PR yourself.
 Show the merge plan:
 
 ```powershell
-.\repo-flow.ps1 pr merge -Number 116
+rf pr merge -Number 116
 ```
 
 Apply only after manual review:
 
 ```powershell
-.\repo-flow.ps1 pr merge -Number 116 -Apply
+rf pr merge -Number 116 -Apply
 ```
 
 `pr accept` is an alias:
 
 ```powershell
-.\repo-flow.ps1 pr accept -Number 116 -Apply
+rf pr accept -Number 116 -Apply
 ```
 
 RepoFlow then:
@@ -491,13 +504,13 @@ No other command invokes this workflow automatically.
 Plan:
 
 ```powershell
-.\repo-flow.ps1 branch cleanup
+rf branch cleanup
 ```
 
 Apply:
 
 ```powershell
-.\repo-flow.ps1 branch cleanup -Apply
+rf branch cleanup -Apply
 ```
 
 RepoFlow protects the current branch, `main`, `master`, and the configured base branch.
@@ -507,12 +520,16 @@ RepoFlow protects the current branch, `main`, `master`, and the configured base 
 Use the full script path:
 
 ```powershell
-C:\Tools\RepoFlow\repo-flow.ps1 issue run -Number 67 -Apply
+C:\Tools\RepoFlow\rf.ps1 issue run -Number 67 -Apply
 ```
 
 Or add a helper function to your PowerShell profile:
 
 ```powershell
+function rf {
+    & 'C:\Tools\RepoFlow\rf.ps1' @args
+}
+
 function repo-flow {
     & 'C:\Tools\RepoFlow\repo-flow.ps1' @args
 }
@@ -533,11 +550,11 @@ Reload it:
 Then run:
 
 ```powershell
-repo-flow repo list
-repo-flow repo current
-repo-flow issue run -Number 67
-repo-flow issue run -Number 12 -Repo repo-flow -Apply
-repo-flow pr status -Number 116
+rf repo list
+rf repo current
+rf issue run -Number 67
+rf issue run -Number 12 -Repo repo-flow -Apply
+rf pr status -Number 116
 ```
 
 ## Testing
