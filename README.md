@@ -450,8 +450,25 @@ rf pr watch -Number 116
 rf ci watch -Number 116
 ```
 
-### Mark a PR ready
+### Structured CI diagnostics
 
+When a GitHub Actions check fails, RepoFlow converts supported log output into focused diagnostic records before preparing a CI-repair prompt.
+
+Failures are classified as `formatting`, `lint`, `typecheck`, `test`, `build`, or `infrastructure/unknown`.
+
+For supported test output, including Vitest, the diagnostic context preserves separate records for each failed test and includes the test file, test name, assertion or error summary, expected and received values, source path and line, concise stack context, and the related check, step, or command when available.
+
+The generated CI context contains:
+
+- a concise human-readable summary;
+- a machine-readable JSON representation;
+- bounded raw log output when the format is unknown or infrastructure-related.
+
+ANSI control sequences and oversized noisy sections such as large DOM snapshots are removed or bounded. The beginning and end of long fallback diagnostics are retained. Successful tests that intentionally write to stderr are not reported as failed tests.
+
+All CI log content is treated as untrusted text. RepoFlow never evaluates log content as PowerShell or interpolates it into executable commands.
+
+### Mark a PR ready
 Plan:
 
 ```powershell
@@ -514,24 +531,6 @@ rf branch cleanup -Apply
 ```
 
 RepoFlow protects the current branch, `main`, `master`, and the configured base branch.
-
-#### Structured CI diagnostics
-
-When a GitHub Actions check fails, RepoFlow converts supported log output into focused diagnostic records before preparing a CI-repair prompt.
-
-Failures are classified as `formatting`, `lint`, `typecheck`, `test`, `build`, or `infrastructure/unknown`.
-
-For supported test output, including Vitest, the diagnostic context preserves separate records for each failed test and includes the test file, test name, assertion or error summary, expected and received values, source path and line, concise stack context, and the related check, step, or command when available.
-
-The generated CI context contains:
-
-- a concise human-readable summary;
-- a machine-readable JSON representation;
-- bounded raw log output when the format is unknown or infrastructure-related.
-
-ANSI control sequences and oversized noisy sections such as large DOM snapshots are removed or bounded. The beginning and end of long fallback diagnostics are retained. Successful tests that intentionally write to stderr are not reported as failed tests.
-
-All CI log content is treated as untrusted text. RepoFlow never evaluates log content as PowerShell or interpolates it into executable commands.
 
 ## Run RepoFlow from anywhere
 Use the full script path:

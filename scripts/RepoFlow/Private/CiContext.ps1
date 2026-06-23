@@ -25,6 +25,16 @@ function Write-RepoFlowFailedCiContext {
         Where-Object { $_.bucket -in @('fail', 'cancel') }
     )
 
+    $checkCount = [Math]::Max(1, $failedChecks.Count)
+    $rawBudgetPerCheck = [Math]::Max(
+        256,
+        [Math]::Floor(24000 / $checkCount)
+    )
+    $rawHeadPerCheck = [Math]::Min(
+        4000,
+        [Math]::Floor($rawBudgetPerCheck / 2)
+    )
+
     $content = [System.Collections.Generic.List[string]]::new()
     $content.Add('# Failed CI checks')
     $content.Add('')
@@ -73,9 +83,22 @@ function Write-RepoFlowFailedCiContext {
             continue
         }
 
+        $normalisedRunLines = foreach ($line in @($logResult.Text -split '\r?\n')) {
+            $prefixMatch = [regex]::Match(
+                $line,
+                '^(?:[^\t]*\t){3}(?<message>.*)$'
+            )
+
+            if ($prefixMatch.Success) {
+                $prefixMatch.Groups['message'].Value.Trim()
+            }
+            else {
+                $line.Trim()
+            }
+        }
+
         $runLines = @(
-            $logResult.Text -split '\r?\n' |
-            ForEach-Object { $_.Trim() } |
+            $normalisedRunLines |
             Where-Object { $_ -match '^Run\s+' } |
             Select-Object -First 1
         )
@@ -96,43 +119,52 @@ function Write-RepoFlowFailedCiContext {
                 -Text $logResult.Text `
                 -CheckName $checkName `
                 -StepName $stepName `
-                -Command $command
+                -Command $command `
+                -MaximumRawCharacters ([Math]::Min(4000, $rawBudgetPerCheck)) `
+                -HeadCharacters ([Math]::Min(2000, $rawHeadPerCheck))
         )
 
-        if ($diagnostics.Count -eq 0) {
-            $content.Add('### Raw failed log fallback')
+        if ($diagnostics.Count -gt 0) {
+            $content.Add('### Structured diagnostics')
             $content.Add('')
-            $content.Add('```text')
             $content.Add(
-                (Get-RepoFlowBoundedText `
-                    -Text $logResult.Text `
-                    -MaximumCharacters 24000 `
-                    -HeadCharacters 4000)
+                (Format-RepoFlowCiDiagnostics `
+                    -Diagnostics $diagnostics)
+            )
+            $content.Add('')
+            $content.Add('### Machine-readable diagnostics')
+            $content.Add('')
+            $content.Add('```json')
+
+            $machineDiagnostics = @(
+                $diagnostics |
+                Select-Object `
+                    Category,
+                    CheckName,
+                    StepName,
+                    Command,
+                    Project,
+                    Suite,
+                    TestFile,
+                    TestName,
+                    Summary,
+                    Expected,
+                    Received,
+                    SourcePath,
+                    SourceLine,
+                    Stack
+            )
+
+            $content.Add(
+                [string](
+                    ConvertTo-Json `
+                        -InputObject $machineDiagnostics `
+                        -Depth 8
+                )
             )
             $content.Add('```')
             $content.Add('')
-            continue
         }
-
-        $content.Add('### Structured diagnostics')
-        $content.Add('')
-        $content.Add(
-            (Format-RepoFlowCiDiagnostics `
-                -Diagnostics $diagnostics)
-        )
-        $content.Add('')
-        $content.Add('### Machine-readable diagnostics')
-        $content.Add('')
-        $content.Add('```json')
-        $content.Add(
-            [string](
-                ConvertTo-Json `
-                    -InputObject $diagnostics `
-                    -Depth 8
-            )
-        )
-        $content.Add('```')
-        $content.Add('')
 
         $knownDiagnostics = @(
             $diagnostics |
@@ -141,19 +173,24 @@ function Write-RepoFlowFailedCiContext {
             }
         )
 
-        if ($knownDiagnostics.Count -eq 0) {
-            $content.Add('### Raw failed log fallback')
-            $content.Add('')
-            $content.Add('```text')
-            $content.Add(
-                (Get-RepoFlowBoundedText `
-                    -Text $logResult.Text `
-                    -MaximumCharacters 24000 `
-                    -HeadCharacters 4000)
-            )
-            $content.Add('```')
-            $content.Add('')
+        if ($diagnostics.Count -eq 0 -or $knownDiagnostics.Count -eq 0) {
+            $rawHeading = '### Raw failed log fallback'
         }
+        else {
+            $rawHeading = '### Bounded raw context'
+        }
+
+        $content.Add($rawHeading)
+        $content.Add('')
+        $content.Add('```text')
+        $content.Add(
+            (Get-RepoFlowBoundedText `
+                -Text $logResult.Text `
+                -MaximumCharacters $rawBudgetPerCheck `
+                -HeadCharacters $rawHeadPerCheck)
+        )
+        $content.Add('```')
+        $content.Add('')
     }
 
     Set-Content `

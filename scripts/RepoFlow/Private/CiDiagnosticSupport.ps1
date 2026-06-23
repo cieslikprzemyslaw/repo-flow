@@ -38,6 +38,10 @@ function New-RepoFlowCiDiagnosticRecord {
 
         [AllowNull()]
         [AllowEmptyString()]
+        [string]$Suite,
+
+        [AllowNull()]
+        [AllowEmptyString()]
         [string]$TestFile,
 
         [AllowNull()]
@@ -78,6 +82,7 @@ function New-RepoFlowCiDiagnosticRecord {
         StepName = $StepName
         Command = $Command
         Project = $Project
+        Suite = $Suite
         TestFile = $TestFile
         TestName = $TestName
         Summary = $Summary
@@ -154,12 +159,18 @@ function Get-RepoFlowCiSummaryLine {
             $line -match '(?i)assertionerror|testinglibraryelementerror|\berror\b|\bfailed\b|\bfailure\b|code style|\bproblem\b|\brejected\b|\bcancelled\b|\bcanceled\b|could not|error\s+ts\d+|zx-\d+' -and
             $line -notmatch '(?i)^process completed with exit code'
         ) {
-            return $line
+            return Get-RepoFlowBoundedText `
+                -Text $line `
+                -MaximumCharacters 1000 `
+                -HeadCharacters 700
         }
     }
 
     if ($lines.Count -gt 0) {
-        return [string]$lines[0]
+        return Get-RepoFlowBoundedText `
+            -Text ([string]$lines[0]) `
+            -MaximumCharacters 1000 `
+            -HeadCharacters 700
     }
 
     return ''
@@ -191,6 +202,16 @@ function Format-RepoFlowCiDiagnostics {
             $name = [string]$record.Category
         }
 
+        $metadata = [System.Collections.Generic.List[string]]::new()
+
+        if (-not [string]::IsNullOrWhiteSpace([string]$record.Project)) {
+            $metadata.Add("project: $($record.Project)")
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace([string]$record.Suite)) {
+            $metadata.Add("suite: $($record.Suite)")
+        }
+
         $location = $null
         if (-not [string]::IsNullOrWhiteSpace([string]$record.SourcePath)) {
             if ($null -ne $record.SourceLine) {
@@ -202,6 +223,10 @@ function Format-RepoFlowCiDiagnostics {
         }
 
         $line = '- [{0}] {1}' -f $record.Category, $name
+
+        if ($metadata.Count -gt 0) {
+            $line += ' [{0}]' -f ($metadata -join ', ')
+        }
 
         if (-not [string]::IsNullOrWhiteSpace([string]$record.Summary)) {
             $line += ': {0}' -f $record.Summary

@@ -1,0 +1,13 @@
+Tests	Run npm test	2026-06-23T14:00:00.0000000Z	Run npm test
+Tests	Run npm test	2026-06-23T14:00:00.1000000Z	
+Tests	Run npm test	2026-06-23T14:00:00.2000000Z	> app@1.0.0 test
+Tests	Run npm test	2026-06-23T14:00:00.3000000Z	> vitest run
+Tests	Run npm test	2026-06-23T14:00:00.4000000Z	
+Tests	Run npm test	2026-06-23T14:00:00.5000000Z	FAIL [web] src/components/loginForm/loginForm.test.tsx > LoginForm > shows validation error
+Tests	Run npm test	2026-06-23T14:00:00.6000000Z	AssertionError: expected "Email is required" to be "Enter an email address"
+Tests	Run npm test	2026-06-23T14:00:00.7000000Z	Expected: "Enter an email address"
+Tests	Run npm test	2026-06-23T14:00:00.8000000Z	Received: "Email is required"
+Tests	Run npm test	2026-06-23T14:00:00.9000000Z	❯ src/components/loginForm/loginForm.test.tsx:55:10
+Tests	Run npm test	2026-06-23T14:00:01.0000000Z	❯ processTicksAndRejections node:internal/process/task_queues:95:5
+Tests	Run npm test	2026-06-23T14:00:01.1000000Z	Tests 1 failed (1)
+Tests	Run npm test	2026-06-23T14:00:01.2000000Z	Process completed with exit code 1.
