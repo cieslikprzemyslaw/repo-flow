@@ -339,7 +339,7 @@ Describe 'RepoFlow PR repair apply workflow' {
             Mock Get-RepoFlowPullRequest {
                 $script:pullRequestCalls++
 
-                if ($script:pullRequestCalls -lt 4) {
+                if ($script:pullRequestCalls -lt 3) {
                     return [pscustomobject]@{
                         number = 116
                         title = 'Fix CI'
