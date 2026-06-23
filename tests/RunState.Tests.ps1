@@ -364,6 +364,42 @@ Describe 'RepoFlow persisted run state' {
             $updated.pauseReason.Length | Should -BeLessThan 300
         }
 
+        It 'reopens a terminal run only through the explicit resume mutation' {
+            $record = Start-RepoFlowRunRecord `
+                -ConfigPath $script:configPath `
+                -RepositoryRoot $script:repositoryA `
+                -Repository 'repo-a' `
+                -RepositorySlug 'owner/repo-a' `
+                -Operation 'issue-run' `
+                -IssueNumber 5 `
+                -Branch 'feature/5-resume' `
+                -BaseSha ('a' * 40) `
+                -HeadSha ('b' * 40) `
+                -Phase 'ci-failed' `
+                -Provider 'codex' `
+                -Model 'gpt-5.5'
+
+            Complete-RepoFlowRunRecord `
+                -ConfigPath $script:configPath `
+                -RunId ([string]$record.runId) `
+                -Outcome 'completed'
+
+            Resume-RepoFlowRunRecord `
+                -ConfigPath $script:configPath `
+                -RunId ([string]$record.runId) `
+                -CurrentPhase 'ci-failed'
+
+            $updated = Get-RepoFlowRunRecord `
+                -ConfigPath $script:configPath `
+                -RunId ([string]$record.runId)
+
+            $updated.status | Should -Be 'running'
+            $updated.currentPhase | Should -Be 'ci-failed'
+            $updated.completedAtUtc | Should -BeNullOrEmpty
+            $updated.terminalOutcome | Should -BeNullOrEmpty
+            $updated.pauseReason | Should -BeNullOrEmpty
+        }
+
         It 'keeps run records when active repository selection is reset' {
             $record = Start-RepoFlowRunRecord `
                 -ConfigPath $script:configPath `

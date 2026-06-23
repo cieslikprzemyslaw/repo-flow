@@ -428,6 +428,24 @@ The workflow can:
 
 It stops after CI. It does not merge.
 
+### Resume an interrupted issue workflow
+
+Inspect the deterministic resume plan:
+
+```powershell
+rf issue resume -Number 67
+```
+
+Apply the validated next phase:
+
+```powershell
+rf issue resume -Number 67 -Apply
+```
+
+`issue resume` reconstructs the workflow from persisted run state and validates the configured repository, issue branch, local and remote heads, pull request, PR head SHA, CI status, trusted review comments, and working tree. It never creates a duplicate branch or pull request. Ambiguous or conflicting state stops with an actionable error instead of guessing.
+
+The command can continue after an interrupted agent run, commit or push failure, missing PR checkpoint, pending or failed CI, and new trusted top-level PR feedback. Merged and closed pull requests return a terminal result. The existing `issue continue ... -Resume` form remains available for scripts that explicitly resume one interrupted review-comment agent run.
+
 ### Continue an open PR from a comment
 
 Use the newest trusted top-level PR comment:

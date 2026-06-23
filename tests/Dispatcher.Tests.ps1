@@ -11,6 +11,34 @@ Describe 'RepoFlow command dispatcher' {
             Should -Invoke Invoke-RepoFlowIssueRunWorkflow -Times 1 -Exactly
         }
 
+        It 'routes deterministic issue resume commands' {
+            Mock Invoke-RepoFlowIssueResumeWorkflow { return }
+
+            Invoke-RepoFlow -Area issue -Action resume -Number 5
+
+            Should -Invoke Invoke-RepoFlowIssueResumeWorkflow -Times 1 -Exactly
+        }
+
+        It 'preserves legacy issue continue Resume routing' {
+            Mock Invoke-RepoFlowIssueContinueWorkflow { return }
+
+            Invoke-RepoFlow `
+                -Area issue `
+                -Action continue `
+                -Number 5 `
+                -PrCommentId 9001 `
+                -Resume
+
+            Should -Invoke Invoke-RepoFlowIssueContinueWorkflow `
+                -Times 1 `
+                -Exactly `
+                -ParameterFilter {
+                    $Number -eq 5 -and
+                    $PrCommentId -eq 9001 -and
+                    $Resume -eq $true
+                }
+        }
+
         It 'requires a PR comment source for issue continue' {
             {
                 Invoke-RepoFlow -Area issue -Action continue -Number 66
