@@ -83,43 +83,11 @@ function Write-RepoFlowFailedCiContext {
             continue
         }
 
-        $normalisedRunLines = foreach ($line in @($logResult.Text -split '\r?\n')) {
-            $prefixMatch = [regex]::Match(
-                $line,
-                '^(?:[^\t]*\t){3}(?<message>.*)$'
-            )
-
-            if ($prefixMatch.Success) {
-                $prefixMatch.Groups['message'].Value.Trim()
-            }
-            else {
-                $line.Trim()
-            }
-        }
-
-        $runLines = @(
-            $normalisedRunLines |
-            Where-Object { $_ -match '^Run\s+' } |
-            Select-Object -First 1
-        )
-
-        $stepName = $null
-        $command = $null
-
-        if ($runLines.Count -gt 0) {
-            $stepName = [string]$runLines[0]
-
-            if ($stepName.Length -gt 4) {
-                $command = $stepName.Substring(4).Trim()
-            }
-        }
-
+        $cleanLogText = ConvertTo-RepoFlowCiNormalisedText -Text $logResult.Text
         $diagnostics = @(
             Get-RepoFlowCiDiagnostics `
-                -Text $logResult.Text `
+                -Text $cleanLogText `
                 -CheckName $checkName `
-                -StepName $stepName `
-                -Command $command `
                 -MaximumRawCharacters ([Math]::Min(4000, $rawBudgetPerCheck)) `
                 -HeadCharacters ([Math]::Min(2000, $rawHeadPerCheck))
         )
@@ -185,7 +153,7 @@ function Write-RepoFlowFailedCiContext {
         $content.Add('```text')
         $content.Add(
             (Get-RepoFlowBoundedText `
-                -Text $logResult.Text `
+                -Text $cleanLogText `
                 -MaximumCharacters $rawBudgetPerCheck `
                 -HeadCharacters $rawHeadPerCheck)
         )

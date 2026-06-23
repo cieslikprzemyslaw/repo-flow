@@ -14,6 +14,103 @@ function Remove-RepoFlowAnsiSequence {
     return [regex]::Replace($Text, $ansiPattern, '')
 }
 
+function ConvertTo-RepoFlowCiNormalisedText {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Text
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return ''
+    }
+
+    $cleanText = Remove-RepoFlowAnsiSequence -Text $Text
+    $cleanText = $cleanText.Replace("`r`n", "`n").Replace("`r", "`n")
+
+    $normalisedLines = foreach ($line in @($cleanText -split '\n')) {
+        $prefixMatch = [regex]::Match(
+            $line,
+            '^(?:[^\t]*\t){3}(?<message>.*)$'
+        )
+
+        if ($prefixMatch.Success) {
+            $prefixMatch.Groups['message'].Value
+        }
+        else {
+            $line
+        }
+    }
+
+    return $normalisedLines -join "`n"
+}
+
+function Get-RepoFlowCiRunSections {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Text,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$DefaultStepName,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$DefaultCommand
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return @()
+    }
+
+    $runMatches = [regex]::Matches(
+        $Text,
+        '(?m)^\s*Run\s+.+$'
+    )
+
+    if ($runMatches.Count -eq 0) {
+        return @(
+            [pscustomobject]@{
+                Text = $Text
+                StepName = $DefaultStepName
+                Command = $DefaultCommand
+            }
+        )
+    }
+
+    $sections = [System.Collections.Generic.List[object]]::new()
+
+    for ($index = 0; $index -lt $runMatches.Count; $index++) {
+        $runMatch = $runMatches[$index]
+        $start = $runMatch.Index
+
+        if ($index + 1 -lt $runMatches.Count) {
+            $end = $runMatches[$index + 1].Index
+        }
+        else {
+            $end = $Text.Length
+        }
+
+        $stepName = $runMatch.Value.Trim()
+        $command = $DefaultCommand
+
+        if ($stepName.Length -gt 4) {
+            $command = $stepName.Substring(4).Trim()
+        }
+
+        $sections.Add([pscustomobject]@{
+                Text = $Text.Substring($start, $end - $start).Trim()
+                StepName = $stepName
+                Command = $command
+            })
+    }
+
+    return $sections.ToArray()
+}
+
 function New-RepoFlowCiDiagnosticRecord {
     [CmdletBinding()]
     param(

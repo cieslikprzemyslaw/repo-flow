@@ -462,7 +462,7 @@ The generated CI context contains:
 
 - a concise human-readable summary;
 - a machine-readable JSON representation;
-- bounded raw log output when the format is unknown or infrastructure-related.
+- bounded raw context for known failures and a bounded raw-log fallback when the format is unknown or infrastructure-related.
 
 ANSI control sequences and oversized noisy sections such as large DOM snapshots are removed or bounded. The beginning and end of long fallback diagnostics are retained. Successful tests that intentionally write to stderr are not reported as failed tests.
 

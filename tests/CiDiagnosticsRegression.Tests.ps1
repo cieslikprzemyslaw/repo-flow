@@ -27,6 +27,49 @@ Describe 'RepoFlow CI diagnostics review regressions' {
             $records | Should -HaveCount 1
             $records[0].Category | Should -Be 'build'
             $records[0].Summary | Should -Match 'Could not resolve'
+            $records[0].StepName | Should -Be 'Run npm run build'
+            $records[0].Command | Should -Be 'npm run build'
+        }
+
+        It 'preserves a later build failure after a failed test section' {
+            $text = [System.IO.File]::ReadAllText(
+                (Join-Path $env:REPO_FLOW_CI_FIXTURE_DIRECTORY 'failed-test-then-build-failure.log')
+            )
+
+            $records = @(
+                Get-RepoFlowCiDiagnostics `
+                    -Text $text `
+                    -CheckName 'Validate'
+            )
+
+            $records | Should -HaveCount 2
+            $records[0].Category | Should -Be 'test'
+            $records[0].StepName | Should -Be 'Run npm test'
+            $records[1].Category | Should -Be 'build'
+            $records[1].Summary | Should -Match 'Could not resolve'
+            $records[1].StepName | Should -Be 'Run npm run build'
+            $records[1].Command | Should -Be 'npm run build'
+        }
+
+        It 'uses the matching run section metadata for later failures' {
+            $text = [System.IO.File]::ReadAllText(
+                (Join-Path $env:REPO_FLOW_CI_FIXTURE_DIRECTORY 'lint-then-build-failure.log')
+            )
+
+            $records = @(
+                Get-RepoFlowCiDiagnostics `
+                    -Text $text `
+                    -CheckName 'Validate'
+            )
+
+            $records | Should -HaveCount 2
+            $records[0].Category | Should -Be 'lint'
+            $records[0].StepName | Should -Be 'Run npm run lint'
+            $records[0].Command | Should -Be 'npm run lint'
+            $records[1].Category | Should -Be 'build'
+            $records[1].StepName | Should -Be 'Run npm run build'
+            $records[1].Command | Should -Be 'npm run build'
+            $records[1].Summary | Should -Match 'Could not resolve'
         }
 
         It 'extracts project suite and Vitest source markers from prefixed logs' {

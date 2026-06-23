@@ -1,0 +1,19 @@
+Run npm run lint
+
+> app@1.0.0 lint
+> eslint src --max-warnings=0
+
+src/app.ts
+  14:7  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 1 problem (1 error, 0 warnings)
+Process completed with exit code 1.
+
+Run npm run build
+
+> app@1.0.0 build
+> vite build
+
+Error during build
+Could not resolve "./missing-module" from "src/app.ts"
+Process completed with exit code 1.

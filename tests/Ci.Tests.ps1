@@ -9,12 +9,12 @@ Describe 'RepoFlow CI state handling' {
             Mock Invoke-RepoFlowCommand {
                 [pscustomobject]@{
                     ExitCode = 1
-                    Text = @'
+                    Text = @"
 [
   { "name": "Validate (push)", "bucket": "fail", "link": "https://example.test/old" },
   { "name": "Validate (pull_request)", "bucket": "pending", "link": "https://example.test/new" }
 ]
-'@
+"@
                 }
             }
 
@@ -29,12 +29,12 @@ Describe 'RepoFlow CI state handling' {
             Mock Invoke-RepoFlowCommand {
                 [pscustomobject]@{
                     ExitCode = 1
-                    Text = @'
+                    Text = @"
 [
   { "name": "Validate (push)", "bucket": "fail", "link": "https://example.test/one" },
   { "name": "Validate (pull_request)", "bucket": "pass", "link": "https://example.test/two" }
 ]
-'@
+"@
                 }
             }
 
@@ -124,6 +124,56 @@ Describe 'RepoFlow CI diagnostics' {
             $context | Should -Match '### Machine-readable diagnostics'
             $context | Should -Match '"Category":\s*"test"'
             $context | Should -Match '"TestFile":\s*"src/components/loginForm/loginForm\.test\.tsx"'
+            $context | Should -Match '### Bounded raw context'
+        }
+
+        It 'cleans ANSI sequences and GitHub prefixes in final raw context output' {
+            $outputPath = Join-Path $TestDrive 'ci-context-clean-raw.md'
+            $escape = [string][char]27
+            $logText = @(
+                "Tests`tRun npm test`t2026-06-23T14:00:00.5000000Z`t${escape}[31mFAIL${escape}[0m src/utils/date.test.ts > formatDate > rejects invalid input"
+                'Tests`tRun npm test`t2026-06-23T14:00:00.6000000Z`tAssertionError: expected "2026-01-01" to be "2026-01-02"'
+                'Tests`tRun npm test`t2026-06-23T14:00:00.7000000Z`t'
+                'Tests`tRun npm test`t2026-06-23T14:00:00.8000000Z`tExpected: "2026-01-02"'
+                'Tests`tRun npm test`t2026-06-23T14:00:00.9000000Z`tReceived: "2026-01-01"'
+                'Tests`tRun npm test`t2026-06-23T14:00:01.0000000Z`t'
+                'Tests`tRun npm test`t2026-06-23T14:00:01.1000000Z`t at src/utils/date.test.ts:12:4'
+                'Tests`tRun npm test`t2026-06-23T14:00:01.2000000Z`tTests 1 failed (1)'
+                'Tests`tRun npm test`t2026-06-23T14:00:01.3000000Z`tProcess completed with exit code 1.'
+            ) -join "`n"
+            $checks = @(
+                [pscustomobject]@{
+                    name = 'Tests'
+                    bucket = 'fail'
+                    link = 'https://github.com/owner/repository/actions/runs/12345'
+                }
+            )
+
+            Mock Get-RepoFlowPullRequestChangedFiles {
+                @('src/utils/date.test.ts')
+            }
+            Mock Invoke-RepoFlowCommand {
+                [pscustomobject]@{
+                    ExitCode = 1
+                    Text = $logText
+                }
+            }
+
+            Write-RepoFlowFailedCiContext `
+                -IssueNumber 22 `
+                -PullRequestNumber 121 `
+                -Checks $checks `
+                -Repository 'owner/repository' `
+                -BaseBranch 'master' `
+                -OutputPath $outputPath
+
+            $context = Get-Content -LiteralPath $outputPath -Raw
+
+            $context | Should -Match '### Bounded raw context'
+            $context | Should -Not -Match ([regex]::Escape($escape))
+            $context | Should -Not -Match 'Tests\tRun npm test\t2026-06-23'
+            $context | Should -Match 'FAIL src/utils/date.test.ts > formatDate > rejects invalid input'
+            $context | Should -Match 'Run npm test'
         }
 
         It 'keeps bounded raw fallback for unknown failed output' {
