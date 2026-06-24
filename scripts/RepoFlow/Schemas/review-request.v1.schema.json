@@ -1,0 +1,241 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://repo-flow.local/schemas/review-request.v1.schema.json",
+  "title": "RepoFlow automated review request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "kind",
+    "requestId",
+    "repository",
+    "issue",
+    "pullRequest",
+    "baseSha",
+    "headSha",
+    "acceptanceCriteria",
+    "sourceLinks",
+    "changedFiles",
+    "ciSummary",
+    "truncation",
+    "createdAtUtc"
+  ],
+  "properties": {
+    "contractVersion": {
+      "enum": [
+        "1"
+      ],
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "review_request"
+      ],
+      "type": "string"
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "repository": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "issue": {
+      "$ref": "#/definitions/githubReference"
+    },
+    "pullRequest": {
+      "$ref": "#/definitions/githubReference"
+    },
+    "baseSha": {
+      "$ref": "#/definitions/gitSha"
+    },
+    "headSha": {
+      "$ref": "#/definitions/gitSha"
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      },
+      "minItems": 1
+    },
+    "sourceLinks": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 8,
+        "maxLength": 2048,
+        "pattern": "^https://"
+      },
+      "minItems": 1
+    },
+    "changedFiles": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/definitions/changedFile"
+      },
+      "minItems": 1
+    },
+    "ciSummary": {
+      "$ref": "#/definitions/ciSummary"
+    },
+    "truncation": {
+      "$ref": "#/definitions/truncation"
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "maxLength": 64,
+      "format": "date-time",
+      "pattern": "(?:Z|\\+00:00)$"
+    }
+  },
+  "definitions": {
+    "gitSha": {
+      "type": "string",
+      "pattern": "^(?:[0-9A-Fa-f]{40}|[0-9A-Fa-f]{64})$"
+    },
+    "githubReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "url"
+      ],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "url": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 2048,
+          "pattern": "^https://"
+        }
+      }
+    },
+    "changedFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "status"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "added",
+            "modified",
+            "removed",
+            "renamed",
+            "copied",
+            "changed",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "ciCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "status",
+        "summary"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "passing",
+            "failing",
+            "pending",
+            "skipped",
+            "unknown"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "ciSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "summary",
+        "checks"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "passing",
+            "failing",
+            "pending",
+            "not_run",
+            "unknown"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "checks": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/definitions/ciCheck"
+          }
+        }
+      }
+    },
+    "truncation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acceptanceCriteria",
+        "sourceLinks",
+        "changedFiles",
+        "ciSummary"
+      ],
+      "properties": {
+        "acceptanceCriteria": {
+          "type": "boolean"
+        },
+        "sourceLinks": {
+          "type": "boolean"
+        },
+        "changedFiles": {
+          "type": "boolean"
+        },
+        "ciSummary": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -94,9 +94,11 @@ repo-flow/
 │       ├── RepoFlow.psd1
 │       ├── RepoFlow.psm1
 │       ├── repo-flow.schema.json
+│       ├── Schemas/
 │       ├── Public/
 │       └── Private/
 └── tests/
+    ├── fixtures/
     └── *.Tests.ps1
 ```
 
@@ -514,6 +516,14 @@ The generated CI context contains:
 ANSI control sequences and oversized noisy sections such as large DOM snapshots are removed or bounded. The beginning and end of long fallback diagnostics are retained. Successful tests that intentionally write to stderr are not reported as failed tests.
 
 All CI log content is treated as untrusted text. RepoFlow never evaluates log content as PowerShell or interpolates it into executable commands.
+
+### Automated review contract
+
+RepoFlow defines versioned `review_request` and `review_result` envelopes for future automated PR review workflows. The contract includes strict JSON schemas, unambiguous GitHub comment markers, exact request-ID and head-SHA binding, replay protection hooks, bounded payloads, and explicit truncation flags.
+
+Human-readable Markdown may accompany the machine-readable JSON. Payload text remains untrusted data and is never evaluated as PowerShell or treated as workflow approval.
+
+See [`docs/AUTOMATED-REVIEW-CONTRACT.md`](docs/AUTOMATED-REVIEW-CONTRACT.md) for the v1 fields, examples, limits, matching rules, and security boundary.
 
 ### Mark a PR ready
 Plan:

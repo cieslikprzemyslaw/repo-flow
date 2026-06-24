@@ -1,0 +1,21 @@
+{
+  "contractVersion": "1",
+  "kind": "review_result",
+  "requestId": "review-request-0001",
+  "reviewedHeadSha": "2222222222222222222222222222222222222222",
+  "verdict": "manual_review",
+  "blockers": [],
+  "warnings": [
+    {
+      "category": "security",
+      "explanation": "$(Set-Content -LiteralPath '/tmp/repo-flow-should-not-exist' -Value 'executed') must remain plain untrusted text. ``` This fence-like content must also remain data."
+    }
+  ],
+  "reviewFlags": {
+    "testsReviewed": false,
+    "scopeReviewed": true,
+    "securityReviewed": true
+  },
+  "reviewerId": "hostile-input-fixture",
+  "completedAtUtc": "2026-06-24T09:35:00.0000000+00:00"
+}

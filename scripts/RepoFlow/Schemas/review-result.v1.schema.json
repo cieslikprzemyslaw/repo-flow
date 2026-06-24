@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://repo-flow.local/schemas/review-result.v1.schema.json",
+  "title": "RepoFlow automated review result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "kind",
+    "requestId",
+    "reviewedHeadSha",
+    "verdict",
+    "blockers",
+    "warnings",
+    "reviewFlags",
+    "reviewerId",
+    "completedAtUtc"
+  ],
+  "properties": {
+    "contractVersion": {
+      "enum": [
+        "1"
+      ],
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "review_result"
+      ],
+      "type": "string"
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "reviewedHeadSha": {
+      "$ref": "#/definitions/gitSha"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "changes_required",
+        "manual_review"
+      ]
+    },
+    "blockers": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/definitions/finding"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/definitions/finding"
+      }
+    },
+    "reviewFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "testsReviewed",
+        "scopeReviewed",
+        "securityReviewed"
+      ],
+      "properties": {
+        "testsReviewed": {
+          "type": "boolean"
+        },
+        "scopeReviewed": {
+          "type": "boolean"
+        },
+        "securityReviewed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "reviewerId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "completedAtUtc": {
+      "type": "string",
+      "maxLength": 64,
+      "format": "date-time",
+      "pattern": "(?:Z|\\+00:00)$"
+    }
+  },
+  "definitions": {
+    "gitSha": {
+      "type": "string",
+      "pattern": "^(?:[0-9A-Fa-f]{40}|[0-9A-Fa-f]{64})$"
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "explanation"
+      ],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "correctness",
+            "security",
+            "scope",
+            "tests",
+            "compatibility",
+            "maintainability",
+            "documentation",
+            "other"
+          ]
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "dependencies": {
+        "startLine": [
+          "path"
+        ],
+        "endLine": [
+          "path",
+          "startLine"
+        ]
+      }
+    }
+  }
+}

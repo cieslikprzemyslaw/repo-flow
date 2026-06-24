@@ -1,0 +1,21 @@
+{
+  "contractVersion": "1",
+  "kind": "review_result",
+  "requestId": "review-request-0001",
+  "reviewedHeadSha": "2222222222222222222222222222222222222222",
+  "verdict": "pass",
+  "blockers": [],
+  "warnings": [
+    {
+      "category": "documentation",
+      "explanation": "Consider adding a second worked example in a later task."
+    }
+  ],
+  "reviewFlags": {
+    "testsReviewed": true,
+    "scopeReviewed": true,
+    "securityReviewed": true
+  },
+  "reviewerId": "openai-review-bridge",
+  "completedAtUtc": "2026-06-24T09:35:00.0000000+00:00"
+}
