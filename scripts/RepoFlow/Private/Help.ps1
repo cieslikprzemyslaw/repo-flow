@@ -61,6 +61,9 @@ Commands:
   pr repair
       Repair a failed open pull request without merging it.
 
+  review run
+      Publish or reuse an automated-review request and wait for a trusted result.
+
   branch cleanup
       Find or delete safely merged local branches.
 
@@ -332,6 +335,34 @@ Usage:
 
 The command is plan-only by default. Add -Apply to run one bounded repair
 cycle and observe the repaired PR checks.
+'@
+        }
+
+        'review' {
+            return @'
+RepoFlow automated-review commands
+
+  rf review run -Number <pr>
+  rf review run -Number <pr> -Apply
+'@
+        }
+
+        'review/run' {
+            return @'
+review run
+
+Publishes one idempotent automated-review request for the exact current PR
+head, then waits for a matching trusted review-result comment.
+
+Plan:
+  rf review run -Number 24
+
+Publish and wait:
+  rf review run -Number 24 -Apply
+
+The command never starts a coding agent, approves a pull request, marks it
+ready, or merges it. A timeout, malformed trusted result, or changed PR head
+pauses the persisted run safely.
 '@
         }
 

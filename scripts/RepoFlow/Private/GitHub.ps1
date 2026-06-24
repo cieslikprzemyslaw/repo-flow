@@ -121,7 +121,7 @@ function Get-RepoFlowPullRequest {
         '--repo',
         $Repository,
         '--json',
-        'number,title,state,isDraft,mergedAt,mergeStateStatus,baseRefName,headRefName,headRefOid,url,reviewDecision,author,body'
+        'number,title,state,isDraft,mergedAt,mergeStateStatus,baseRefName,baseRefOid,headRefName,headRefOid,url,reviewDecision,author,body'
     )
 
     return $result.Data

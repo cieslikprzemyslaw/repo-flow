@@ -45,6 +45,18 @@ Describe 'RepoFlow command dispatcher' {
             } | Should -Throw '*requires -LastPrComment or -PrCommentId*'
         }
 
+        It 'routes automated review commands without invoking merge' {
+            Mock Invoke-RepoFlowAutomatedReviewWorkflow { return }
+            Mock Invoke-RepoFlowPrMergeWorkflow { throw 'Merge must not run.' }
+
+            Invoke-RepoFlow -Area review -Action run -Number 24
+
+            Should -Invoke Invoke-RepoFlowAutomatedReviewWorkflow `
+                -Times 1 `
+                -Exactly
+            Should -Invoke Invoke-RepoFlowPrMergeWorkflow -Times 0 -Exactly
+        }
+
         It 'routes pr merge commands' {
             Mock Invoke-RepoFlowPrMergeWorkflow { return }
             Invoke-RepoFlow -Area pr -Action merge -Number 116

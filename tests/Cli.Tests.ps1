@@ -167,6 +167,25 @@ Describe 'RepoFlow CLI parser' {
             }
     }
 
+    It 'maps automated review commands to Invoke-RepoFlow' {
+        Mock -CommandName Invoke-RepoFlow -ModuleName RepoFlow
+
+        Invoke-RepoFlowCli `
+            -Arguments @('review', 'run', '-Number', '24', '-Apply') `
+            -RepositoryRoot $script:TestRepositoryRoot
+
+        Should -Invoke -CommandName Invoke-RepoFlow `
+            -ModuleName RepoFlow `
+            -Times 1 `
+            -Exactly `
+            -ParameterFilter {
+                $Area -eq 'review' -and
+                $Action -eq 'run' -and
+                $Number -eq 24 -and
+                $Apply -eq $true
+            }
+    }
+
     It 'maps run options to Invoke-RepoFlow' {
         Mock -CommandName Invoke-RepoFlow -ModuleName RepoFlow
 
