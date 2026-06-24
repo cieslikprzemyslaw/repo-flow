@@ -41,6 +41,15 @@ Do not store tokens, passwords, API keys, issue requirements, or executable Powe
 
 ## Commands
 
+### Diagnose the installation
+
+```powershell
+.\repo-flow.ps1 doctor
+.\repo-flow.ps1 doctor -Repo flow
+```
+
+The doctor command is read-only and continues far enough to report multiple failures even when normal workflows cannot load the configuration. It prints PASS/WARN/FAIL results and exits non-zero only when required checks fail.
+
 ### Validate configuration
 
 ```powershell

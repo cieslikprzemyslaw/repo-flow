@@ -20,6 +20,7 @@ RepoFlow
 
 Usage:
   rf <area> <action> [options]
+  rf doctor [-Repo <name>]
   rf help [topic]
   rf -h | --help
   rf --version
@@ -29,6 +30,9 @@ Launchers:
   repo-flow and repo-flow.ps1 remain backward-compatible entrypoints.
 
 Commands:
+  doctor
+      Run read-only installation, configuration, repository, and access diagnostics.
+
   issue sync
       Synchronise labels, milestones, and issues from issues-manifest.json.
 
@@ -119,6 +123,26 @@ Help examples:
   rf help pr
   rf help "pr merge"
   rf help "branch cleanup"
+'@
+        }
+
+        'doctor' {
+            return @'
+doctor
+
+Runs read-only diagnostics for the RepoFlow runtime, tools, authentication,
+configuration, registered repositories, local state, workflow files, and
+working trees. It never changes configuration, Git, GitHub, branches, files,
+or state.
+
+Run all checks:
+  rf doctor
+
+Check with an explicit target repository selection:
+  rf doctor -Repo flow
+
+The command prints a concise PASS/WARN/FAIL table. WARN results do not change
+the exit code. Required FAIL results produce a non-zero process exit code.
 '@
         }
 
