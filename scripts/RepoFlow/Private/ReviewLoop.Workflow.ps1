@@ -57,6 +57,14 @@ function Invoke-RepoFlowPrReviewWorkflow {
         -RequirePassingCi $options.RequirePassingCi `
         -Wait
 
+    $pullRequest = Get-RepoFlowPullRequest `
+        -Number $Number `
+        -Repository $repository
+    Assert-RepoFlowPrReviewPullRequest `
+        -PullRequest $pullRequest `
+        -Config $config
+    Assert-RepoFlowPrReviewLocalState -PullRequest $pullRequest
+
     $initialised = Initialize-RepoFlowPrReviewLoopRun `
         -ConfigPath $stateConfigPath `
         -RepositoryRoot ([string]$context.RepositoryRoot) `
@@ -90,7 +98,7 @@ function Invoke-RepoFlowPrReviewWorkflow {
     $runId = [string]$runRecord.runId
     $reviewAttempt = [int]$runRecord.reviewAttemptCount
     $repairAttempt = [int]$runRecord.repairAttemptCount
-    $scopeHeadSha = [string]$runRecord.baseSha
+    $scopeHeadSha = Get-RepoFlowPrReviewScopeSha -RunRecord $runRecord
 
     try {
         while ($reviewAttempt -lt $options.MaxReviewCycles) {
@@ -111,6 +119,27 @@ function Invoke-RepoFlowPrReviewWorkflow {
                 -StateConfigPath $stateConfigPath `
                 -RunId $runId `
                 -Phase "review-ci-before-$($reviewAttempt + 1)"
+
+            $pullRequest = Get-RepoFlowPullRequest `
+                -Number $Number `
+                -Repository $repository
+            Assert-RepoFlowPrReviewPullRequest `
+                -PullRequest $pullRequest `
+                -Config $config
+            Assert-RepoFlowPrReviewLocalState -PullRequest $pullRequest
+
+            if (
+                -not [string]::Equals(
+                    [string]$runRecord.baseSha,
+                    [string]$pullRequest.baseRefOid,
+                    [System.StringComparison]::OrdinalIgnoreCase
+                )
+            ) {
+                throw (
+                    'The pull-request base SHA changed during the review loop. ' +
+                    'Complete or abandon this run and start a fresh review.'
+                )
+            }
 
             $reviewAttempt++
             Set-RepoFlowRunCheckpoint `

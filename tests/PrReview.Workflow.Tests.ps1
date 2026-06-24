@@ -51,8 +51,9 @@ Describe 'RepoFlow bounded PR review workflow' {
                 operation = 'pr-review-loop'
                 status = 'running'
                 currentPhase = 'review-loop-started'
-                baseSha = ('b' * 40)
+                baseSha = ('a' * 40)
                 headSha = ('b' * 40)
+                createdAtUtc = '2026-06-24T18:00:00Z'
                 reviewAttemptCount = 0
                 repairAttemptCount = 0
             }
@@ -142,6 +143,41 @@ Describe 'RepoFlow bounded PR review workflow' {
                 -Exactly
             Should -Invoke Get-RepoFlowAcceptedPrReviewResult `
                 -Times 0 `
+                -Exactly
+        }
+
+        It 'stops if the PR base changes while CI is being observed' {
+            $script:prReads = 0
+
+            Mock Get-RepoFlowPullRequest {
+                $script:prReads++
+
+                if ($script:prReads -ge 4) {
+                    return [pscustomobject]@{
+                        number = 25
+                        title = 'Add review loop'
+                        url = 'https://example.test/pull/25'
+                        state = 'OPEN'
+                        baseRefName = 'main'
+                        baseRefOid = ('d' * 40)
+                        headRefName = 'feature/10-review-loop'
+                        headRefOid = ('b' * 40)
+                        body = 'Closes #10'
+                    }
+                }
+
+                return $script:pullRequest
+            }
+
+            {
+                Invoke-RepoFlowPrReviewWorkflow -Number 25 -Apply
+            } | Should -Throw '*base SHA changed*'
+
+            Should -Invoke Invoke-RepoFlowAutomatedReviewWorkflow `
+                -Times 0 `
+                -Exactly
+            Should -Invoke Set-RepoFlowPrReviewLoopPaused `
+                -Times 1 `
                 -Exactly
         }
 

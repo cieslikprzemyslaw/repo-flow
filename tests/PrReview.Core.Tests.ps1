@@ -63,10 +63,13 @@ Describe 'RepoFlow PR review loop core' {
                 operation = 'pr-review-loop'
                 status = 'completed'
                 currentPhase = 'review-passed'
+                baseSha = ('a' * 40)
                 headSha = ('b' * 40)
+                createdAtUtc = '2026-06-24T18:00:00Z'
             }
             $pullRequest = [pscustomobject]@{
                 number = 25
+                baseRefOid = ('a' * 40)
                 headRefName = 'feature/10-review-loop'
                 headRefOid = ('c' * 40)
             }
@@ -83,7 +86,9 @@ Describe 'RepoFlow PR review loop core' {
                 [pscustomobject]@{
                     runId = 'rf-pr-review-v1-owner-repo-pr-25'
                     status = 'running'
+                    baseSha = ('a' * 40)
                     headSha = ('c' * 40)
+                    createdAtUtc = '2026-06-24T18:05:00Z'
                 }
             }
 
@@ -98,6 +103,117 @@ Describe 'RepoFlow PR review loop core' {
 
             $initialised.AlreadyPassed | Should -BeFalse
             Should -Invoke Start-RepoFlowRunRecord -Times 1 -Exactly
+        }
+
+        It 'does not reuse a completed pass after the PR base changes' {
+            $configPath = Join-Path $TestDrive '.repo-flow.json'
+            $existing = [pscustomobject]@{
+                runId = 'rf-pr-review-v1-owner-repo-pr-25'
+                operation = 'pr-review-loop'
+                status = 'completed'
+                currentPhase = 'review-passed'
+                baseSha = ('a' * 40)
+                headSha = ('b' * 40)
+                createdAtUtc = '2026-06-24T18:00:00Z'
+            }
+            $pullRequest = [pscustomobject]@{
+                number = 25
+                baseRefOid = ('d' * 40)
+                headRefName = 'feature/10-review-loop'
+                headRefOid = ('b' * 40)
+            }
+            $issue = [pscustomobject]@{ number = 10 }
+            $config = [pscustomobject]@{
+                agent = [pscustomobject]@{
+                    provider = 'codex'
+                    model = 'gpt-5.5'
+                }
+            }
+
+            Mock Get-RepoFlowRunRecord { $existing }
+            Mock Start-RepoFlowRunRecord {
+                [pscustomobject]@{
+                    runId = 'rf-pr-review-v1-owner-repo-pr-25'
+                    status = 'running'
+                    baseSha = ('d' * 40)
+                    headSha = ('b' * 40)
+                    createdAtUtc = '2026-06-24T18:05:00Z'
+                }
+            }
+
+            $initialised = Initialize-RepoFlowPrReviewLoopRun `
+                -ConfigPath $configPath `
+                -RepositoryRoot 'C:\repo' `
+                -RepositoryName 'repo' `
+                -RepositorySlug 'owner/repo' `
+                -Issue $issue `
+                -PullRequest $pullRequest `
+                -Config $config
+
+            $initialised.AlreadyPassed | Should -BeFalse
+            Should -Invoke Start-RepoFlowRunRecord -Times 1 -Exactly
+        }
+
+        It 'reuses a completed pass only for the exact base and head revision' {
+            $configPath = Join-Path $TestDrive '.repo-flow.json'
+            $existing = [pscustomobject]@{
+                runId = 'rf-pr-review-v1-owner-repo-pr-25'
+                operation = 'pr-review-loop'
+                status = 'completed'
+                currentPhase = 'review-passed'
+                baseSha = ('a' * 40)
+                headSha = ('b' * 40)
+                createdAtUtc = '2026-06-24T18:00:00Z'
+            }
+            $pullRequest = [pscustomobject]@{
+                number = 25
+                baseRefOid = ('a' * 40)
+                headRefName = 'feature/10-review-loop'
+                headRefOid = ('b' * 40)
+            }
+            $issue = [pscustomobject]@{ number = 10 }
+            $config = [pscustomobject]@{
+                agent = [pscustomobject]@{
+                    provider = 'codex'
+                    model = 'gpt-5.5'
+                }
+            }
+
+            Mock Get-RepoFlowRunRecord { $existing }
+            Mock Start-RepoFlowRunRecord {
+                throw 'An exact revision must reuse the completed pass.'
+            }
+
+            $initialised = Initialize-RepoFlowPrReviewLoopRun `
+                -ConfigPath $configPath `
+                -RepositoryRoot 'C:\repo' `
+                -RepositoryName 'repo' `
+                -RepositorySlug 'owner/repo' `
+                -Issue $issue `
+                -PullRequest $pullRequest `
+                -Config $config
+
+            $initialised.AlreadyPassed | Should -BeTrue
+            Should -Invoke Start-RepoFlowRunRecord -Times 0 -Exactly
+        }
+
+        It 'keeps one blocker scope across repair heads but isolates new runs' {
+            $run = [pscustomobject]@{
+                runId = 'rf-pr-review-v1-owner-repo-pr-25'
+                baseSha = ('a' * 40)
+                headSha = ('b' * 40)
+                createdAtUtc = '2026-06-24T18:00:00Z'
+            }
+
+            $first = Get-RepoFlowPrReviewScopeSha -RunRecord $run
+            $run.headSha = ('c' * 40)
+            $afterRepair = Get-RepoFlowPrReviewScopeSha -RunRecord $run
+            $run.createdAtUtc = '2026-06-24T18:05:00Z'
+            $newRun = Get-RepoFlowPrReviewScopeSha -RunRecord $run
+
+            $first | Should -Be $afterRepair
+            $first | Should -Not -Be $newRun
+            $first | Should -Match '^[0-9a-f]{64}$'
         }
 
         It 'creates the same blocker fingerprint regardless of blocker order' {
