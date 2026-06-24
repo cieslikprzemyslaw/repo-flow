@@ -40,7 +40,10 @@ function Invoke-RepoFlowResumedInitialAgent {
             -RepositoryRoot $Context.RepositoryRoot `
             -Prompt $prompt `
             -FinalMessagePath $finalMessagePath `
-            -Config $config
+            -Config $config `
+            -StateConfigPath $stateConfigPath `
+            -RunId ([string]$record.runId) `
+            -Phase 'issue-agent-running'
 
         if ($result.ExitCode -ne 0) {
             throw "Agent failed:$([Environment]::NewLine)$($result.Text)"
@@ -104,7 +107,10 @@ function Complete-RepoFlowResumedCommit {
         -Issue $Resolved.Issue `
         -Message $message `
         -RepositoryRoot $Context.RepositoryRoot `
-        -Config $Context.Config
+        -Config $Context.Config `
+        -StateConfigPath $Resolved.StateConfigPath `
+        -RunId ([string]$record.runId) `
+        -Phase "${Kind}-pre-commit-fix"
 
     $phase = if ($Kind -eq 'initial') {
         'changes-committed'

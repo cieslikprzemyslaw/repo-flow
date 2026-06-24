@@ -78,101 +78,6 @@ function Get-RepoFlowPrCheckState {
     }
 }
 
-function Wait-RepoFlowPullRequestHead {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [int]$PullRequestNumber,
-
-        [Parameter(Mandatory)]
-        [string]$Repository,
-
-        [Parameter(Mandatory)]
-        [string]$ExpectedHeadSha,
-
-        [Parameter(Mandatory)]
-        [int]$TimeoutSeconds,
-
-        [Parameter(Mandatory)]
-        [int]$PollSeconds
-    )
-
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    $shortExpected = $ExpectedHeadSha.Substring(0, [Math]::Min(8, $ExpectedHeadSha.Length))
-
-    Write-Host "[CI] Waiting for GitHub to register PR head $shortExpected..."
-
-    do {
-        $pullRequest = Get-RepoFlowPullRequest `
-            -Number $PullRequestNumber `
-            -Repository $Repository
-
-        $actualHeadSha = [string]$pullRequest.headRefOid
-
-        if ($actualHeadSha -eq $ExpectedHeadSha) {
-            Write-Host "[CI] GitHub registered PR head $shortExpected."
-            return $pullRequest
-        }
-
-        if ((Get-Date) -ge $deadline) {
-            $actualText = if ([string]::IsNullOrWhiteSpace($actualHeadSha)) {
-                '<not reported>'
-            }
-            else {
-                $actualHeadSha
-            }
-
-            throw "GitHub did not register expected PR head '$ExpectedHeadSha' before timeout. Current PR head: $actualText"
-        }
-
-        Start-Sleep -Seconds $PollSeconds
-    }
-    while ($true)
-}
-
-function Wait-RepoFlowPrChecks {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [int]$PullRequestNumber,
-
-        [Parameter(Mandatory)]
-        [string]$Repository,
-
-        [Parameter(Mandatory)]
-        [int]$TimeoutSeconds,
-
-        [Parameter(Mandatory)]
-        [int]$PollSeconds
-    )
-
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-
-    do {
-        $state = Get-RepoFlowPrCheckState -PullRequestNumber $PullRequestNumber -Repository $Repository
-
-        if ($state.Checks.Count -eq 0) {
-            Write-Host '[CI] No checks reported yet.'
-        }
-        else {
-            foreach ($check in $state.Checks) {
-                Write-Host "[CI] $($check.name): $($check.bucket)"
-            }
-        }
-
-        if ($state.Status -ne 'pending') {
-            return $state
-        }
-
-        if ((Get-Date) -ge $deadline) {
-            return $state
-        }
-
-        Start-Sleep -Seconds $PollSeconds
-    }
-    while ($true)
-}
-
 function Invoke-RepoFlowCiFixAttempt {
     [CmdletBinding()]
     param(
@@ -189,7 +94,19 @@ function Invoke-RepoFlowCiFixAttempt {
         [string]$RepositoryRoot,
 
         [Parameter(Mandatory)]
-        $Config
+        $Config,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$StateConfigPath,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$RunId,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Phase = 'ci-fix-agent'
     )
 
     $contextPath = Join-Path ([System.IO.Path]::GetTempPath()) (
@@ -220,7 +137,10 @@ function Invoke-RepoFlowCiFixAttempt {
             -Prompt $prompt `
             -FinalMessagePath $finalMessagePath `
             -Config $Config `
-            -ReasoningEffort ([string]$Config.agent.ciFixReasoningEffort)
+            -ReasoningEffort ([string]$Config.agent.ciFixReasoningEffort) `
+            -StateConfigPath $StateConfigPath `
+            -RunId $RunId `
+            -Phase $Phase
 
         if ($result.ExitCode -ne 0) {
             Write-Warning "Agent CI-fix attempt failed: $($result.Text)"
@@ -250,7 +170,10 @@ function Invoke-RepoFlowCiFixAttempt {
             -Issue $Issue `
             -Message $commitMessage `
             -RepositoryRoot $RepositoryRoot `
-            -Config $Config
+            -Config $Config `
+            -StateConfigPath $StateConfigPath `
+            -RunId $RunId `
+            -Phase 'ci-pre-commit-fix'
         Write-Host '[GIT] Pushing CI fix...'
         Push-RepoFlowBranch -Branch ([string]$PullRequest.headRefName)
         return $true
@@ -277,7 +200,19 @@ function Invoke-RepoFlowCiPolicy {
 
         [Parameter(Mandatory)]
         [ValidateSet('skip', 'observe', 'require-passing')]
-        [string]$Mode
+        [string]$Mode,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$StateConfigPath,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$RunId,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Phase = 'ci-watching'
     )
 
     if ($Mode -eq 'skip') {
@@ -288,12 +223,21 @@ function Invoke-RepoFlowCiPolicy {
         }
     }
 
+    $noActivityWarningSeconds = [int](Get-RepoFlowProperty `
+        -Object $Config.agent `
+        -Name 'noActivityWarningSeconds' `
+        -Default 180)
+
     Write-Host "[CI] Watching checks for up to $($Config.ci.timeoutSeconds) seconds..."
     $state = Wait-RepoFlowPrChecks `
         -PullRequestNumber ([int]$PullRequest.number) `
         -Repository ([string]$Config.repository.slug) `
         -TimeoutSeconds ([int]$Config.ci.timeoutSeconds) `
-        -PollSeconds ([int]$Config.ci.pollSeconds)
+        -PollSeconds ([int]$Config.ci.pollSeconds) `
+        -StateConfigPath $StateConfigPath `
+        -RunId $RunId `
+        -Phase $Phase `
+        -NoActivityWarningSeconds $noActivityWarningSeconds
 
     if ($state.Status -eq 'passed') {
         Write-Host '[CI] All reported checks passed.'
@@ -324,7 +268,10 @@ function Invoke-RepoFlowCiPolicy {
             -PullRequest $PullRequest `
             -Checks $state.Checks `
             -RepositoryRoot $RepositoryRoot `
-            -Config $Config
+            -Config $Config `
+            -StateConfigPath $StateConfigPath `
+            -RunId $RunId `
+            -Phase 'ci-fix-agent'
 
         if (-not $created) {
             break
@@ -337,14 +284,22 @@ function Invoke-RepoFlowCiPolicy {
             -Repository ([string]$Config.repository.slug) `
             -ExpectedHeadSha $expectedHeadSha `
             -TimeoutSeconds ([int]$Config.ci.timeoutSeconds) `
-            -PollSeconds ([int]$Config.ci.pollSeconds) |
+            -PollSeconds ([int]$Config.ci.pollSeconds) `
+            -StateConfigPath $StateConfigPath `
+            -RunId $RunId `
+            -Phase 'ci-head-sync' `
+            -NoActivityWarningSeconds $noActivityWarningSeconds |
             Out-Null
 
         $state = Wait-RepoFlowPrChecks `
             -PullRequestNumber ([int]$PullRequest.number) `
             -Repository ([string]$Config.repository.slug) `
             -TimeoutSeconds ([int]$Config.ci.timeoutSeconds) `
-            -PollSeconds ([int]$Config.ci.pollSeconds)
+            -PollSeconds ([int]$Config.ci.pollSeconds) `
+            -StateConfigPath $StateConfigPath `
+            -RunId $RunId `
+            -Phase $Phase `
+            -NoActivityWarningSeconds $noActivityWarningSeconds
 
         if ($state.Status -eq 'passed') {
             Write-Host '[CI] All checks passed after the automatic fix.'

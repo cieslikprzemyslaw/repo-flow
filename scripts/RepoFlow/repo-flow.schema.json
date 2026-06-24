@@ -253,6 +253,11 @@
         },
         "runProjectChecks": {
           "type": "boolean"
+        },
+        "noActivityWarningSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 7200
         }
       }
     },

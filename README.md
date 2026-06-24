@@ -179,6 +179,7 @@ A minimal workflow configuration looks like this:
     "model": "gpt-5.5",
     "minimumCliVersion": null,
     "heartbeatSeconds": 15,
+    "noActivityWarningSeconds": 180,
     "reasoningEffort": "medium",
     "ciFixReasoningEffort": "low",
     "preCommitFixReasoningEffort": "low",
@@ -317,6 +318,14 @@ Use Claude Code:
 ```
 
 `model` is the agent model name used for a run. `minimumCliVersion` is an optional lower bound for the installed CLI executable, checked through `command --version` before the agent starts; set it to `null` to skip the lower-bound check.
+
+### Agent and CI progress telemetry
+
+RepoFlow prints concise observable progress rather than treating changed-file count as a percentage. Agent heartbeats include the persisted workflow phase, elapsed time, changed-file count, working-tree fingerprint changes, the last changed-file write time, a detected agent process and CPU delta when available, and an observable validation command when the provider stream reports one.
+
+The status is one of `active`, `waiting`, `no observable change`, or `possibly stalled`. `agent.noActivityWarningSeconds` controls when the warning appears and defaults to `180`. The warning is informational: RepoFlow never terminates an agent solely because the changed-file count or other observable signals remain unchanged.
+
+CI observation reports check transitions instead of repeatedly presenting an unchanged check list. Agent and CI heartbeats persist `currentPhase`, `lastHeartbeatAtUtc`, and `lastObservableActivityAtUtc` in the run record so interrupted workflows retain their last observable state.
 
 ## Target repository contract
 

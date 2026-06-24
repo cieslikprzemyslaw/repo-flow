@@ -264,6 +264,7 @@ function Read-RepoFlowConfiguration {
         'model',
         'minimumCliVersion',
         'heartbeatSeconds',
+        'noActivityWarningSeconds',
         'reasoningEffort',
         'ciFixReasoningEffort',
         'preCommitFixReasoningEffort',
@@ -306,6 +307,7 @@ function Read-RepoFlowConfiguration {
     $agentModel = Get-RepoFlowProperty -Object $agent -Name 'model' -Default 'gpt-5.5'
     $minimumCliVersion = Get-RepoFlowProperty -Object $agent -Name 'minimumCliVersion' -Default $null
     $heartbeatSeconds = Get-RepoFlowProperty -Object $agent -Name 'heartbeatSeconds' -Default 15
+    $noActivityWarningSeconds = Get-RepoFlowProperty -Object $agent -Name 'noActivityWarningSeconds' -Default 180
     $reasoningEffort = Get-RepoFlowProperty -Object $agent -Name 'reasoningEffort' -Default 'medium'
     $ciFixReasoningEffort = Get-RepoFlowProperty -Object $agent -Name 'ciFixReasoningEffort' -Default 'low'
     $preCommitFixReasoningEffort = Get-RepoFlowProperty -Object $agent -Name 'preCommitFixReasoningEffort' -Default 'low'
@@ -343,6 +345,7 @@ function Read-RepoFlowConfiguration {
     Assert-RepoFlowString -Value $agentModel -Path '$.agent.model'
     Assert-RepoFlowNullableSemanticVersionString -Value $minimumCliVersion -Path '$.agent.minimumCliVersion'
     Assert-RepoFlowIntegerRange -Value $heartbeatSeconds -Minimum 5 -Maximum 300 -Path '$.agent.heartbeatSeconds'
+    Assert-RepoFlowIntegerRange -Value $noActivityWarningSeconds -Minimum 30 -Maximum 7200 -Path '$.agent.noActivityWarningSeconds'
     Assert-RepoFlowString -Value $reasoningEffort -Path '$.agent.reasoningEffort'
     Assert-RepoFlowString -Value $ciFixReasoningEffort -Path '$.agent.ciFixReasoningEffort'
     Assert-RepoFlowString -Value $preCommitFixReasoningEffort -Path '$.agent.preCommitFixReasoningEffort'
@@ -416,6 +419,7 @@ function Read-RepoFlowConfiguration {
                 [string]$minimumCliVersion
             }
             heartbeatSeconds = [int]$heartbeatSeconds
+            noActivityWarningSeconds = [int]$noActivityWarningSeconds
             reasoningEffort = [string]$reasoningEffort
             ciFixReasoningEffort = [string]$ciFixReasoningEffort
             preCommitFixReasoningEffort = [string]$preCommitFixReasoningEffort
@@ -492,6 +496,15 @@ function Assert-RepoFlowConfiguration {
     Assert-RepoFlowString -Value $Config.agent.model -Path '$.agent.model'
     Assert-RepoFlowNullableSemanticVersionString -Value $Config.agent.minimumCliVersion -Path '$.agent.minimumCliVersion'
     Assert-RepoFlowIntegerRange -Value $Config.agent.heartbeatSeconds -Minimum 5 -Maximum 300 -Path '$.agent.heartbeatSeconds'
+    $noActivityWarningSeconds = Get-RepoFlowProperty `
+        -Object $Config.agent `
+        -Name 'noActivityWarningSeconds' `
+        -Default 180
+    Assert-RepoFlowIntegerRange `
+        -Value $noActivityWarningSeconds `
+        -Minimum 30 `
+        -Maximum 7200 `
+        -Path '$.agent.noActivityWarningSeconds'
 
     foreach ($name in @('reasoningEffort', 'ciFixReasoningEffort', 'preCommitFixReasoningEffort')) {
         $value = [string]$Config.agent.$name

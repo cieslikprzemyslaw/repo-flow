@@ -90,6 +90,8 @@ function Start-RepoFlowRunRecord {
         repairAttemptCount = $RepairAttemptCount
         createdAtUtc = $now
         updatedAtUtc = $now
+        lastHeartbeatAtUtc = $now
+        lastObservableActivityAtUtc = $now
         completedAtUtc = $null
         terminalOutcome = $null
         pauseReason = $null
@@ -209,7 +211,11 @@ function Set-RepoFlowRunCheckpoint {
                 }
 
                 $record.pauseReason = $null
-                $record.updatedAtUtc = New-RepoFlowRunTimestamp
+                Initialize-RepoFlowRunTelemetryFields -Record $record | Out-Null
+                $checkpointAt = New-RepoFlowRunTimestamp
+                $record.updatedAtUtc = $checkpointAt
+                $record.lastHeartbeatAtUtc = $checkpointAt
+                $record.lastObservableActivityAtUtc = $checkpointAt
                 $updated = $true
                 break
             }
@@ -257,10 +263,13 @@ function Set-RepoFlowRunPaused {
                     $record.currentPhase = $CurrentPhase
                 }
                 $effectivePhase = [string]$record.currentPhase
+                Initialize-RepoFlowRunTelemetryFields -Record $record | Out-Null
                 $record.pauseReason = New-RepoFlowSafePauseReason `
                     -Reason $PauseReason `
                     -Phase $effectivePhase
-                $record.updatedAtUtc = New-RepoFlowRunTimestamp
+                $pausedAt = New-RepoFlowRunTimestamp
+                $record.updatedAtUtc = $pausedAt
+                $record.lastHeartbeatAtUtc = $pausedAt
                 $updated = $true
                 break
             }
@@ -303,10 +312,13 @@ function Complete-RepoFlowRunRecord {
                 )
             ) {
                 $record.status = 'completed'
+                Initialize-RepoFlowRunTelemetryFields -Record $record | Out-Null
                 $record.terminalOutcome = $Outcome
                 $record.pauseReason = $null
                 $record.completedAtUtc = $now
                 $record.updatedAtUtc = $now
+                $record.lastHeartbeatAtUtc = $now
+                $record.lastObservableActivityAtUtc = $now
                 $record.lastSafePhase = $record.currentPhase
                 $updated = $true
                 break

@@ -50,7 +50,10 @@ function Invoke-RepoFlowResumedCi {
             -PullRequest $pullRequest `
             -RepositoryRoot $Context.RepositoryRoot `
             -Config $config `
-            -Mode $effectiveCiMode
+            -Mode $effectiveCiMode `
+            -StateConfigPath $Resolved.StateConfigPath `
+            -RunId ([string]$record.runId) `
+            -Phase 'ci-watching'
 
         $headSha = Get-RepoFlowCommitHash
         $identifiers = Get-RepoFlowCiIdentifiersFromChecks `
