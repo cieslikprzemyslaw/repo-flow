@@ -225,6 +225,22 @@ Supported placeholders:
 
 Unknown placeholders are rejected.
 
+## Progress telemetry
+
+Agent heartbeats show only observable signals:
+
+- persisted workflow phase;
+- `active`, `waiting`, `no observable change`, or `possibly stalled`;
+- elapsed time and time since the last observable activity;
+- changed-file count and working-tree fingerprint transitions;
+- last write time for changed repository files;
+- detected agent process and CPU delta when available;
+- an observable command when the provider event stream exposes it.
+
+`agent.noActivityWarningSeconds` configures the warning threshold. A warning never terminates the agent automatically.
+
+CI polling emits concise check transitions, for example `Validate: pending -> pass`, and uses the same no-activity states. Heartbeat and observable-activity timestamps are persisted in the run state.
+
 ## Validation
 
 Run all local syntax, JSON, and Pester checks:

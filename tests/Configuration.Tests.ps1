@@ -62,6 +62,7 @@ Describe 'RepoFlow configuration validation' {
                     model = 'gpt-5.5'
                     minimumCliVersion = $null
                     heartbeatSeconds = 15
+                    noActivityWarningSeconds = 90
                     reasoningEffort = 'medium'
                     ciFixReasoningEffort = 'low'
                     preCommitFixReasoningEffort = 'low'

@@ -264,6 +264,8 @@ function Show-RepoFlowRunRecord {
     Write-Host "Review attempts: $($RunRecord.reviewAttemptCount)"
     Write-Host "Repair attempts: $($RunRecord.repairAttemptCount)"
     Write-Host "Updated:         $($RunRecord.updatedAtUtc)"
+    Write-Host "Last heartbeat:  $(Get-RepoFlowProperty -Object $RunRecord -Name 'lastHeartbeatAtUtc' -Default '<not recorded>')"
+    Write-Host "Last activity:   $(Get-RepoFlowProperty -Object $RunRecord -Name 'lastObservableActivityAtUtc' -Default '<not recorded>')"
 
     if (-not [string]::IsNullOrWhiteSpace([string]$RunRecord.pauseReason)) {
         Write-Host "Pause reason:    $($RunRecord.pauseReason)"

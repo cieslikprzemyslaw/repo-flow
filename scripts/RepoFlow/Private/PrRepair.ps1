@@ -44,6 +44,7 @@ function Invoke-RepoFlowPrRepairWorkflow {
     $repositoryName = [string]$context.RepositorySelection.Repository.name
     $repository = [string]$config.repository.slug
     $attemptLimit = [int]$config.ci.autoFixAttempts
+    $noActivityWarningSeconds = [int](Get-RepoFlowProperty -Object $config.agent -Name 'noActivityWarningSeconds' -Default 180)
     $pullRequest = Get-RepoFlowPullRequest -Number $Number -Repository $repository
 
     if ($pullRequest.state -ne 'OPEN') {
@@ -234,7 +235,10 @@ function Invoke-RepoFlowPrRepairWorkflow {
                     -Prompt $prompt `
                     -FinalMessagePath $finalMessagePath `
                     -Config $config `
-                    -ReasoningEffort ([string]$config.agent.ciFixReasoningEffort)
+                    -ReasoningEffort ([string]$config.agent.ciFixReasoningEffort) `
+                    -StateConfigPath $stateConfigPath `
+                    -RunId ([string]$runRecord.runId) `
+                    -Phase "repair-agent-attempt-$attempt"
 
                 if ($result.ExitCode -ne 0) {
                     throw "Agent failed:$([Environment]::NewLine)$($result.Text)"
@@ -275,6 +279,9 @@ function Invoke-RepoFlowPrRepairWorkflow {
                     -Message $commitMessage `
                     -RepositoryRoot $context.RepositoryRoot `
                     -Config $config `
+                    -StateConfigPath $stateConfigPath `
+                    -RunId ([string]$runRecord.runId) `
+                    -Phase "repair-pre-commit-$attempt" `
                     -BeforeRetryCommit {
                         Assert-RepoFlowPrRepairLiveHead `
                             -Number $Number `
@@ -300,7 +307,11 @@ function Invoke-RepoFlowPrRepairWorkflow {
                     -Repository $repository `
                     -ExpectedHeadSha $expectedHeadSha `
                     -TimeoutSeconds ([int]$config.ci.timeoutSeconds) `
-                    -PollSeconds ([int]$config.ci.pollSeconds)
+                    -PollSeconds ([int]$config.ci.pollSeconds) `
+                    -StateConfigPath $stateConfigPath `
+                    -RunId ([string]$runRecord.runId) `
+                    -Phase "ci-head-sync-$attempt" `
+                    -NoActivityWarningSeconds $noActivityWarningSeconds
 
                 Set-RepoFlowRunCheckpoint `
                     -ConfigPath $stateConfigPath `
@@ -315,7 +326,11 @@ function Invoke-RepoFlowPrRepairWorkflow {
                     -PullRequestNumber $Number `
                     -Repository $repository `
                     -TimeoutSeconds ([int]$config.ci.timeoutSeconds) `
-                    -PollSeconds ([int]$config.ci.pollSeconds)
+                    -PollSeconds ([int]$config.ci.pollSeconds) `
+                    -StateConfigPath $stateConfigPath `
+                    -RunId ([string]$runRecord.runId) `
+                    -Phase "ci-watching-$attempt" `
+                    -NoActivityWarningSeconds $noActivityWarningSeconds
 
                 $ciIdentifiers = Get-RepoFlowCiIdentifiersFromChecks -Checks $checks.Checks
                 Set-RepoFlowRunCheckpoint `

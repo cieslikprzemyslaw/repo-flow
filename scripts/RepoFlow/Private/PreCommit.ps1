@@ -144,7 +144,19 @@ function Invoke-RepoFlowPreCommitFixAttempt {
         [string]$RepositoryRoot,
 
         [Parameter(Mandatory)]
-        $Config
+        $Config,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$StateConfigPath,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$RunId,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Phase = 'pre-commit-fix'
     )
 
     $contextPath = Join-Path `
@@ -172,7 +184,10 @@ function Invoke-RepoFlowPreCommitFixAttempt {
             -Prompt $prompt `
             -FinalMessagePath $finalMessagePath `
             -Config $Config `
-            -ReasoningEffort ([string]$Config.agent.preCommitFixReasoningEffort)
+            -ReasoningEffort ([string]$Config.agent.preCommitFixReasoningEffort) `
+            -StateConfigPath $StateConfigPath `
+            -RunId $RunId `
+            -Phase $Phase
 
         $summary = Get-RepoFlowAgentFinalMessage -Path $finalMessagePath
 
@@ -213,7 +228,19 @@ function Complete-RepoFlowCommit {
         [Parameter(Mandatory)]
         $Config,
 
-        [scriptblock]$BeforeRetryCommit
+        [scriptblock]$BeforeRetryCommit,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$StateConfigPath,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$RunId,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Phase = 'pre-commit-fix'
     )
 
     $commitResult = Invoke-RepoFlowCommitAttempt `
@@ -254,7 +281,10 @@ function Complete-RepoFlowCommit {
             -Issue $Issue `
             -FailureText $lastFailure `
             -RepositoryRoot $RepositoryRoot `
-            -Config $Config
+            -Config $Config `
+            -StateConfigPath $StateConfigPath `
+            -RunId $RunId `
+            -Phase $Phase
 
         if (-not $fixCompleted) {
             throw (

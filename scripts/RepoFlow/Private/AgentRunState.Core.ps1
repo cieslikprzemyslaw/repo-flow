@@ -191,6 +191,8 @@ function Assert-RepoFlowRunRecord {
         'repairAttemptCount',
         'createdAtUtc',
         'updatedAtUtc',
+        'lastHeartbeatAtUtc',
+        'lastObservableActivityAtUtc',
         'completedAtUtc',
         'terminalOutcome',
         'pauseReason'
@@ -225,6 +227,16 @@ function Assert-RepoFlowRunRecord {
         Assert-RepoFlowTimestampField `
             -Value (Get-RepoFlowProperty -Object $Record -Name $propertyName -Default $null) `
             -Path "$Path.$propertyName"
+    }
+
+    foreach ($propertyName in @(
+        'lastHeartbeatAtUtc',
+        'lastObservableActivityAtUtc'
+    )) {
+        Assert-RepoFlowTimestampField `
+            -Value (Get-RepoFlowProperty -Object $Record -Name $propertyName -Default $null) `
+            -Path "$Path.$propertyName" `
+            -AllowNull
     }
 
     Assert-RepoFlowTimestampField `

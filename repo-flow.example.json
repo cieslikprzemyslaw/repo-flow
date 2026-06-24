@@ -39,6 +39,7 @@
     "model": "claude-sonnet-4-6",
     "minimumCliVersion": null,
     "heartbeatSeconds": 15,
+    "noActivityWarningSeconds": 180,
     "reasoningEffort": "low",
     "ciFixReasoningEffort": "low",
     "preCommitFixReasoningEffort": "low",

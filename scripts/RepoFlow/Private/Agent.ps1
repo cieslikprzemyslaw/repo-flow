@@ -561,140 +561,6 @@ function Write-RepoFlowAgentUsage {
     }
 }
 
-function Invoke-RepoFlowAgentProcessWithHeartbeat {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [string]$Provider,
-
-        [Parameter(Mandatory)]
-        [string]$ExecutablePath,
-
-        [Parameter(Mandatory)]
-        [string[]]$Arguments,
-
-        [Parameter(Mandatory)]
-        [string]$WorkingDirectory,
-
-        [Parameter(Mandatory)]
-        [string]$Prompt,
-
-        [Parameter(Mandatory)]
-        [string]$FinalMessagePath,
-
-        [ValidateRange(5, 300)]
-        [int]$HeartbeatSeconds = 15
-    )
-
-    $promptPath = [System.IO.Path]::GetTempFileName()
-    $stdoutPath = [System.IO.Path]::GetTempFileName()
-    $stderrPath = [System.IO.Path]::GetTempFileName()
-    $exitCodePath = [System.IO.Path]::GetTempFileName()
-    $job = $null
-
-    try {
-        Set-Content -LiteralPath $promptPath -Value $Prompt -Encoding utf8
-
-        $job = Start-Job -ScriptBlock {
-            param(
-                [string]$WorkingDirectory,
-                [string]$ExecutablePath,
-                [string[]]$CommandArguments,
-                [string]$InputPath,
-                [string]$OutputPath,
-                [string]$ErrorPath,
-                [string]$ResultPath
-            )
-
-            Set-Location -LiteralPath $WorkingDirectory
-            $inputContent = Get-Content -LiteralPath $InputPath -Raw
-            $inputContent | & $ExecutablePath @CommandArguments 1> $OutputPath 2> $ErrorPath
-            Set-Content -LiteralPath $ResultPath -Value $LASTEXITCODE -Encoding ascii
-        } -ArgumentList @(
-            $WorkingDirectory,
-            $executablePath,
-            $Arguments,
-            $promptPath,
-            $stdoutPath,
-            $stderrPath,
-            $exitCodePath
-        )
-
-        $startedAt = Get-Date
-        $lastOutputLength = 0L
-
-        while ($job.State -in @('NotStarted', 'Running')) {
-            Start-Sleep -Seconds $HeartbeatSeconds
-            $job = Get-Job -Id $job.Id
-            $elapsed = (Get-Date) - $startedAt
-            $minutes = [Math]::Floor($elapsed.TotalMinutes)
-            $seconds = $elapsed.Seconds
-            $changedFiles = Get-RepoFlowChangedFileCount
-            $stdoutLength = if (Test-Path -LiteralPath $stdoutPath) { (Get-Item -LiteralPath $stdoutPath).Length } else { 0L }
-            $stderrLength = if (Test-Path -LiteralPath $stderrPath) { (Get-Item -LiteralPath $stderrPath).Length } else { 0L }
-            $outputLength = $stdoutLength + $stderrLength
-
-            $activity = if ($changedFiles -gt 0) {
-                'editing files'
-            }
-            elseif ($outputLength -gt $lastOutputLength) {
-                'working'
-            }
-            else {
-                'analysing repository'
-            }
-
-            Write-Host ("[AGENT] {0} | {1}m {2}s | {3} | {4} changed file(s)" -f $Provider, $minutes, $seconds, $activity, $changedFiles)
-            $lastOutputLength = $outputLength
-        }
-
-        Receive-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
-
-        $stdout = Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue
-        $stderr = Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue
-        $exitCode = 1
-
-        if (Test-Path -LiteralPath $exitCodePath) {
-            $exitCodeText = Get-Content -LiteralPath $exitCodePath -Raw -ErrorAction SilentlyContinue
-            $parsedExitCode = 0
-
-            if ([int]::TryParse($exitCodeText.Trim(), [ref]$parsedExitCode)) {
-                $exitCode = $parsedExitCode
-            }
-        }
-
-        if ($job.State -eq 'Failed') {
-            $exitCode = 1
-            $jobError = @(
-                $job.ChildJobs |
-                ForEach-Object { $_.JobStateInfo.Reason } |
-                Where-Object { $null -ne $_ }
-            ) -join [Environment]::NewLine
-
-            if (-not [string]::IsNullOrWhiteSpace($jobError)) {
-                $stderr = @($stderr, $jobError) -join [Environment]::NewLine
-            }
-        }
-
-        $duration = (Get-Date) - $startedAt
-
-        return [pscustomobject]@{
-            ExitCode = $exitCode
-            StandardOutput = $stdout
-            StandardError = $stderr
-            DurationSeconds = [int][Math]::Round($duration.TotalSeconds)
-        }
-    }
-    finally {
-        if ($null -ne $job) {
-            Stop-Job -Job $job -ErrorAction SilentlyContinue
-            Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
-        }
-
-        Remove-Item -LiteralPath $promptPath, $stdoutPath, $stderrPath, $exitCodePath -Force -ErrorAction SilentlyContinue
-    }
-}
-
 function Invoke-RepoFlowCodexWithHeartbeat {
     [CmdletBinding()]
     param(
@@ -718,7 +584,22 @@ function Invoke-RepoFlowCodexWithHeartbeat {
         [string]$ReasoningEffort,
 
         [ValidateRange(5, 300)]
-        [int]$HeartbeatSeconds = 15
+        [int]$HeartbeatSeconds = 15,
+
+        [ValidateRange(30, 7200)]
+        [int]$NoActivityWarningSeconds = 180,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Phase = 'agent-running',
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$StateConfigPath,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$RunId
     )
 
     $arguments = New-RepoFlowCodexArguments `
@@ -734,7 +615,11 @@ function Invoke-RepoFlowCodexWithHeartbeat {
         -WorkingDirectory $RepositoryRoot `
         -Prompt $Prompt `
         -FinalMessagePath $FinalMessagePath `
-        -HeartbeatSeconds $HeartbeatSeconds
+        -HeartbeatSeconds $HeartbeatSeconds `
+        -NoActivityWarningSeconds $NoActivityWarningSeconds `
+        -Phase $Phase `
+        -StateConfigPath $StateConfigPath `
+        -RunId $RunId
 
     $usage = Get-RepoFlowCodexUsage -JsonLines $run.StandardOutput
     Write-RepoFlowAgentUsage -Usage $usage
@@ -791,7 +676,22 @@ function Invoke-RepoFlowClaudeWithHeartbeat {
         [string]$ReasoningEffort,
 
         [ValidateRange(5, 300)]
-        [int]$HeartbeatSeconds = 15
+        [int]$HeartbeatSeconds = 15,
+
+        [ValidateRange(30, 7200)]
+        [int]$NoActivityWarningSeconds = 180,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Phase = 'agent-running',
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$StateConfigPath,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$RunId
     )
 
     $arguments = New-RepoFlowClaudeArguments `
@@ -805,7 +705,11 @@ function Invoke-RepoFlowClaudeWithHeartbeat {
         -WorkingDirectory $RepositoryRoot `
         -Prompt $Prompt `
         -FinalMessagePath $FinalMessagePath `
-        -HeartbeatSeconds $HeartbeatSeconds
+        -HeartbeatSeconds $HeartbeatSeconds `
+        -NoActivityWarningSeconds $NoActivityWarningSeconds `
+        -Phase $Phase `
+        -StateConfigPath $StateConfigPath `
+        -RunId $RunId
 
     $result = Get-RepoFlowClaudeResult -JsonLines $run.StandardOutput
     $effectiveExitCode = if ($run.ExitCode -ne 0 -or $result.IsError) { 1 } else { 0 }
@@ -865,7 +769,19 @@ function Invoke-RepoFlowAgent {
         $Config,
 
         [ValidateSet('minimal', 'low', 'medium', 'high', 'xhigh')]
-        [string]$ReasoningEffort
+        [string]$ReasoningEffort,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$StateConfigPath,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$RunId,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Phase = 'agent-running'
     )
 
     $effectiveReasoningEffort = if ([string]::IsNullOrWhiteSpace($ReasoningEffort)) {
@@ -901,6 +817,11 @@ function Invoke-RepoFlowAgent {
     Write-Host "[AGENT] CLI version: $($versionInfo.Version)"
     Write-Host "[AGENT] Reasoning effort: $effectiveReasoningEffort"
 
+    $noActivityWarningSeconds = [int](Get-RepoFlowProperty `
+        -Object $Config.agent `
+        -Name 'noActivityWarningSeconds' `
+        -Default 180)
+
     switch ($provider) {
         'codex' {
             return Invoke-RepoFlowCodexWithHeartbeat `
@@ -910,7 +831,11 @@ function Invoke-RepoFlowAgent {
                 -ExecutablePath ([string]$versionInfo.ExecutablePath) `
                 -Model $model `
                 -ReasoningEffort $effectiveReasoningEffort `
-                -HeartbeatSeconds ([int]$Config.agent.heartbeatSeconds)
+                -HeartbeatSeconds ([int]$Config.agent.heartbeatSeconds) `
+                -NoActivityWarningSeconds $noActivityWarningSeconds `
+                -Phase $Phase `
+                -StateConfigPath $StateConfigPath `
+                -RunId $RunId
         }
         'claude' {
             return Invoke-RepoFlowClaudeWithHeartbeat `
@@ -920,7 +845,11 @@ function Invoke-RepoFlowAgent {
                 -ExecutablePath ([string]$versionInfo.ExecutablePath) `
                 -Model $model `
                 -ReasoningEffort $effectiveReasoningEffort `
-                -HeartbeatSeconds ([int]$Config.agent.heartbeatSeconds)
+                -HeartbeatSeconds ([int]$Config.agent.heartbeatSeconds) `
+                -NoActivityWarningSeconds $noActivityWarningSeconds `
+                -Phase $Phase `
+                -StateConfigPath $StateConfigPath `
+                -RunId $RunId
         }
         default {
             throw "Unsupported agent provider: $provider"

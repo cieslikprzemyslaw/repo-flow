@@ -141,7 +141,10 @@ function Invoke-RepoFlowIssueRunWorkflow {
             -RepositoryRoot $context.RepositoryRoot `
             -Prompt $prompt `
             -FinalMessagePath $finalMessagePath `
-            -Config $config
+            -Config $config `
+            -StateConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -Phase 'issue-agent-running'
 
         if ($result.ExitCode -ne 0) {
             throw "Agent failed:$([Environment]::NewLine)$($result.Text)"
@@ -198,7 +201,10 @@ function Invoke-RepoFlowIssueRunWorkflow {
             -Issue $issue `
             -Message $commitMessage `
             -RepositoryRoot $context.RepositoryRoot `
-            -Config $config
+            -Config $config `
+            -StateConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -Phase 'pre-commit-fix'
 
         Set-RepoFlowRunCheckpoint `
             -ConfigPath $stateConfigPath `
@@ -256,7 +262,10 @@ function Invoke-RepoFlowIssueRunWorkflow {
             -PullRequest $pullRequest `
             -RepositoryRoot $context.RepositoryRoot `
             -Config $config `
-            -Mode $effectiveCiMode
+            -Mode $effectiveCiMode `
+            -StateConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -Phase 'ci-watching'
 
         $ciIdentifiers = Get-RepoFlowCiIdentifiersFromChecks -Checks $ciState.Checks
         Set-RepoFlowRunCheckpoint `
@@ -471,7 +480,10 @@ function Invoke-RepoFlowIssueContinueWorkflow {
                 -RepositoryRoot $context.RepositoryRoot `
                 -Prompt $prompt `
                 -FinalMessagePath $finalMessagePath `
-                -Config $config
+                -Config $config `
+                -StateConfigPath $stateConfigPath `
+                -RunId ([string]$runRecord.runId) `
+                -Phase 'review-agent-running'
         }
         catch {
             Set-RepoFlowAgentRunInterrupted `
@@ -528,7 +540,10 @@ function Invoke-RepoFlowIssueContinueWorkflow {
             -Issue $issue `
             -Message $commitMessage `
             -RepositoryRoot $context.RepositoryRoot `
-            -Config $config
+            -Config $config `
+            -StateConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -Phase 'review-pre-commit-fix'
 
         Set-RepoFlowRunCheckpoint `
             -ConfigPath $stateConfigPath `
@@ -547,7 +562,14 @@ function Invoke-RepoFlowIssueContinueWorkflow {
             -Repository $repository `
             -ExpectedHeadSha $expectedHeadSha `
             -TimeoutSeconds ([int]$config.ci.timeoutSeconds) `
-            -PollSeconds ([int]$config.ci.pollSeconds)
+            -PollSeconds ([int]$config.ci.pollSeconds) `
+            -StateConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -Phase 'ci-head-sync' `
+            -NoActivityWarningSeconds ([int](Get-RepoFlowProperty `
+                -Object $config.agent `
+                -Name 'noActivityWarningSeconds' `
+                -Default 180))
 
         Set-RepoFlowRunCheckpoint `
             -ConfigPath $stateConfigPath `
@@ -562,7 +584,10 @@ function Invoke-RepoFlowIssueContinueWorkflow {
             -PullRequest $pullRequest `
             -RepositoryRoot $context.RepositoryRoot `
             -Config $config `
-            -Mode $effectiveCiMode
+            -Mode $effectiveCiMode `
+            -StateConfigPath $stateConfigPath `
+            -RunId ([string]$runRecord.runId) `
+            -Phase 'ci-watching'
 
         $ciIdentifiers = Get-RepoFlowCiIdentifiersFromChecks -Checks $ciState.Checks
         Set-RepoFlowRunCheckpoint `
