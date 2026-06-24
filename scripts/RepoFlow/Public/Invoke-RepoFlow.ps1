@@ -10,6 +10,7 @@ function Invoke-RepoFlow {
             'run',
             'config',
             'repo',
+            'doctor',
             'help'
         )]
         [AllowNull()]
@@ -64,8 +65,13 @@ function Invoke-RepoFlow {
     }
 
     if ([string]::IsNullOrWhiteSpace($Action)) {
-        Show-RepoFlowHelp -Topic $normalisedArea
-        return
+        if ($normalisedArea -eq 'doctor') {
+            $Action = 'run'
+        }
+        else {
+            Show-RepoFlowHelp -Topic $normalisedArea
+            return
+        }
     }
 
     $normalisedAction = $Action.Trim().ToLowerInvariant()
@@ -307,6 +313,17 @@ function Invoke-RepoFlow {
         'repo/reset' {
             Invoke-RepoFlowRepositoryResetWorkflow `
                 -Apply:$Apply `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'doctor/run' {
+            if ($Apply) {
+                throw "'doctor' does not accept -Apply because it is always read-only."
+            }
+
+            Invoke-RepoFlowDoctorWorkflow `
+                -Repo $Repo `
                 -ConfigPath $ConfigPath
             return
         }

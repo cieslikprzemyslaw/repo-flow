@@ -140,6 +140,7 @@ Validate the installation:
 ```powershell
 Remove-Module RepoFlow -Force -ErrorAction SilentlyContinue
 .\test-repo-flow.ps1
+.\rf.ps1 doctor
 .\rf.ps1 config validate
 .\rf.ps1 config show
 ```
@@ -364,6 +365,15 @@ rf help issue
 rf help "issue run"
 rf help "pr merge"
 ```
+
+### Doctor diagnostics
+
+```powershell
+rf doctor
+rf doctor -Repo flow
+```
+
+`doctor` is always read-only. It reports a concise PASS/WARN/FAIL table for PowerShell, Git, GitHub CLI authentication, the configured agent and optional minimum version, configuration and local state, registered repository paths and origins, base branches, GitHub write permission, Pester, AGENTS.md, the PR template, an explicitly configured issue manifest, and working-tree status. Required failures return a non-zero process exit code.
 
 ### Configuration
 
