@@ -212,7 +212,9 @@ A minimal workflow configuration looks like this:
       "OWNER",
       "MEMBER",
       "COLLABORATOR"
-    ]
+    ],
+    "maxReviewCycles": 3,
+    "maxRepairCycles": 2
   }
 }
 ```
@@ -536,6 +538,24 @@ The command publishes or reuses one machine-readable request for the exact PR
 head and waits for a matching trusted result. It never starts an agent or
 merges the PR. See
 [`docs/AUTOMATED-REVIEW-BRIDGE.md`](docs/AUTOMATED-REVIEW-BRIDGE.md).
+
+### Bounded PR review and repair
+
+```powershell
+rf pr review -Number 24
+rf pr review -Number 24 -Apply
+```
+
+The PR branch and exact GitHub head must be checked out locally with a clean
+working tree. RepoFlow requires passing CI when `ci.mode` is
+`require-passing`, publishes a review request for the exact head, and records
+the trusted result. A `changes_required` result starts a bounded repair using
+only blockers as untrusted task data. Each repair must pass local validation,
+create a new head, rerun CI, and receive a fresh review.
+
+`reviewFeedback.maxReviewCycles` and `maxRepairCycles` bound the loop. Repeated
+blockers, manual-review verdicts, failures, or exhausted limits pause safely.
+This command never approves or merges a pull request.
 
 ### Mark a PR ready
 Plan:

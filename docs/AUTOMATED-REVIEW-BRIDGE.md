@@ -17,6 +17,11 @@ local run state. `-Apply` publishes one request for the exact current PR head,
 reuses an existing valid request from the authenticated GitHub user, and waits
 for a matching trusted result.
 
+`rf pr review -Number 24 -Apply` builds on this transport. It requires the
+local PR branch and exact head, applies the configured CI gate, records the
+result, and may run a bounded repair/fresh-review loop. The bridge still only
+publishes result data; RepoFlow remains responsible for any local repair.
+
 RepoFlow reuses the existing configuration:
 
 - `reviewFeedback.enabled` enables comment-based review workflows;
