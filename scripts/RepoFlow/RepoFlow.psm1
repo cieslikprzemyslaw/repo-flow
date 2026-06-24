@@ -34,6 +34,8 @@ $privateFiles = @(
     'Prompts.ps1',
     'PreCommit.ps1',
     'PullRequests.ps1',
+    'ReviewContract.Core.ps1',
+    'ReviewContract.Comments.ps1',
     'ReviewFeedback.ps1',
     'CiContext.ps1',
     'Ci.ps1',

@@ -1,0 +1,60 @@
+{
+  "contractVersion": "1",
+  "kind": "review_request",
+  "requestId": "review-request-0001",
+  "repository": "cieslikprzemyslaw/repo-flow",
+  "issue": {
+    "number": 8,
+    "url": "https://github.com/cieslikprzemyslaw/repo-flow/issues/8"
+  },
+  "pullRequest": {
+    "number": 21,
+    "url": "https://github.com/cieslikprzemyslaw/repo-flow/pull/21"
+  },
+  "baseSha": "1111111111111111111111111111111111111111",
+  "headSha": "2222222222222222222222222222222222222222",
+  "acceptanceCriteria": [
+    "JSON schemas validate requests and results.",
+    "Invalid, duplicate, stale, or mismatched results are rejected."
+  ],
+  "sourceLinks": [
+    "https://github.com/cieslikprzemyslaw/repo-flow/issues/8"
+  ],
+  "changedFiles": [
+    {
+      "path": "scripts/RepoFlow/Private/ReviewContract.Core.ps1",
+      "status": "added"
+    },
+    {
+      "path": "scripts/RepoFlow/Private/ReviewContract.Comments.ps1",
+      "status": "added"
+    },
+    {
+      "path": "tests/ReviewContract.Tests.ps1",
+      "status": "added"
+    }
+  ],
+  "ciSummary": {
+    "status": "passing",
+    "summary": "All configured checks passed.",
+    "checks": [
+      {
+        "name": "Validate / Windows",
+        "status": "passing",
+        "summary": "Pester passed."
+      },
+      {
+        "name": "Validate / Linux",
+        "status": "passing",
+        "summary": "Pester passed."
+      }
+    ]
+  },
+  "truncation": {
+    "acceptanceCriteria": false,
+    "sourceLinks": false,
+    "changedFiles": false,
+    "ciSummary": false
+  },
+  "createdAtUtc": "2026-06-24T09:30:00.0000000+00:00"
+}

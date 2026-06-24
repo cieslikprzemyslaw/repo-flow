@@ -241,6 +241,10 @@ Agent heartbeats show only observable signals:
 
 CI polling emits concise check transitions, for example `Validate: pending -> pass`, and uses the same no-activity states. Heartbeat and observable-activity timestamps are persisted in the run state.
 
+## Automated review contract
+
+The versioned request/result format used by future automated review workflows is documented in [`AUTOMATED-REVIEW-CONTRACT.md`](AUTOMATED-REVIEW-CONTRACT.md). The current task defines schemas, markers, parsing, matching, replay checks, limits, and truncation rules only; it does not publish or poll GitHub comments.
+
 ## Validation
 
 Run all local syntax, JSON, and Pester checks:

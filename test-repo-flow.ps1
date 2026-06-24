@@ -63,6 +63,22 @@ $jsonPaths = [System.Collections.Generic.List[string]]::new()
 $jsonPaths.Add((Join-Path $root 'repo-flow.example.json'))
 $jsonPaths.Add((Join-Path $root 'scripts/RepoFlow/repo-flow.schema.json'))
 
+foreach ($schemaPath in @(
+    Get-ChildItem -LiteralPath (Join-Path $root 'scripts/RepoFlow/Schemas') `
+        -Filter '*.json' `
+        -File
+)) {
+    $jsonPaths.Add($schemaPath.FullName)
+}
+
+foreach ($fixturePath in @(
+    Get-ChildItem -LiteralPath (Join-Path $root 'tests/fixtures/review') `
+        -Filter '*.json' `
+        -File
+)) {
+    $jsonPaths.Add($fixturePath.FullName)
+}
+
 $localConfigPath = Join-Path $root '.repo-flow.json'
 if (Test-Path -LiteralPath $localConfigPath) {
     $jsonPaths.Add($localConfigPath)
