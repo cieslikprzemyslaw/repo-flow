@@ -76,7 +76,7 @@ Example:
   ],
   "changedFiles": [
     {
-      "path": "scripts/RepoFlow/Private/ReviewContract.Core.ps1",
+      "path": "scripts/RepoFlow/Private/ReviewContract.Validation.ps1",
       "status": "added"
     }
   ],

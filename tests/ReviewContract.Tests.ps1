@@ -109,7 +109,7 @@ Describe 'RepoFlow automated review contract' {
                 Assert-RepoFlowReviewRequestEnvelope -Request $request
             } | Should -Throw '*safe repository-relative path*'
 
-            $request.changedFiles[0].path = 'scripts/RepoFlow/Private/ReviewContract.Core.ps1'
+            $request.changedFiles[0].path = 'scripts/RepoFlow/Private/ReviewContract.Validation.ps1'
             $result.verdict = 'changes_required'
             $result.blockers = @(
                 [pscustomobject]@{
