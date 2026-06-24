@@ -33,6 +33,18 @@ Commands:
   doctor
       Run read-only installation, configuration, repository, and access diagnostics.
 
+  queue run
+      Execute an explicit ordered issue queue from a JSON manifest.
+
+  queue resume
+      Resume a persisted queue from its last validated task checkpoint.
+
+  queue pause
+      Request a safe pause at the next queue checkpoint.
+
+  queue stop
+      Stop a persisted queue without silently skipping its current task.
+
   issue sync
       Synchronise labels, milestones, and issues from issues-manifest.json.
 
@@ -114,6 +126,8 @@ Common options:
   -Number <number>
   -Apply
   -CiMode skip|observe|require-passing
+  -Manifest <path>
+  -Continuous
   -Repo <name>
   -ConfigPath <path>
 
@@ -129,6 +143,97 @@ Help examples:
   rf help pr
   rf help "pr merge"
   rf help "branch cleanup"
+'@
+        }
+
+        'queue' {
+            return @'
+RepoFlow queue commands
+
+  rf queue run -Manifest <path>
+  rf queue run -Manifest <path> -Continuous -Apply
+
+  rf queue resume -Manifest <path>
+  rf queue resume -Manifest <path> -Continuous -Apply
+
+  rf queue pause -Manifest <path> -Apply
+  rf queue stop -Manifest <path> -Apply
+
+Queue order comes only from the manifest. RepoFlow never guesses the next
+issue from GitHub. State is persisted in .repo-flow.state.json so an
+interrupted task can resume without duplicate branches, pull requests,
+comments, or commits.
+'@
+        }
+
+        'queue/run' {
+            return @'
+queue run
+
+Validates and prints the full ordered queue plan. Apply mode processes one
+task at a time through implementation or deterministic resume, local
+validation, passing CI, bounded review, and the explicit merge gate.
+
+Plan:
+  rf queue run -Manifest .\queue.json
+
+Apply one task:
+  rf queue run -Manifest .\queue.json -Apply
+
+Continue automatically after already-confirmed merges:
+  rf queue run -Manifest .\queue.json -Continuous -Apply
+
+The command never merges a pull request. It pauses at the merge gate and
+requires the existing human-confirmed `rf pr merge` workflow.
+'@
+        }
+
+        'queue/resume' {
+            return @'
+queue resume
+
+Reopens the persisted queue for the exact unchanged manifest and resumes the
+current issue from its deterministic workflow state.
+
+Plan:
+  rf queue resume -Manifest .\queue.json
+
+Apply:
+  rf queue resume -Manifest .\queue.json -Continuous -Apply
+
+A changed manifest fingerprint, stopped queue, ambiguous Git state, failed
+CI, exhausted review limits, or manual-review outcome stops safely.
+'@
+        }
+
+        'queue/pause' {
+            return @'
+queue pause
+
+Requests a safe queue pause. An active long-running agent or CI command is not
+terminated mid-operation; the runner observes the request at its next durable
+checkpoint.
+
+Plan:
+  rf queue pause -Manifest .\queue.json
+
+Apply:
+  rf queue pause -Manifest .\queue.json -Apply
+'@
+        }
+
+        'queue/stop' {
+            return @'
+queue stop
+
+Permanently stops the persisted queue. The current task is recorded as
+stopped and no later task is skipped or started silently.
+
+Plan:
+  rf queue stop -Manifest .\queue.json
+
+Apply:
+  rf queue stop -Manifest .\queue.json -Apply
 '@
         }
 

@@ -2,8 +2,13 @@ function Get-RepoFlowIssueDependencies {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
+        [AllowEmptyString()]
         [string]$IssueBody
     )
+
+    if ([string]::IsNullOrWhiteSpace($IssueBody)) {
+        return @()
+    }
 
     $section = Get-RepoFlowMarkdownSection -Body $IssueBody -Heading 'Dependencies'
 

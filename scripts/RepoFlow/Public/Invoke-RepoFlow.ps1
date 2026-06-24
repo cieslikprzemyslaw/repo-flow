@@ -12,6 +12,7 @@ function Invoke-RepoFlow {
             'repo',
             'doctor',
             'review',
+            'queue',
             'help'
         )]
         [AllowNull()]
@@ -38,6 +39,10 @@ function Invoke-RepoFlow {
         [long]$PrCommentId,
 
         [switch]$Resume,
+
+        [string]$Manifest,
+
+        [switch]$Continuous,
 
         [ValidateSet('skip', 'observe', 'require-passing')]
         [string]$CiMode,
@@ -83,6 +88,64 @@ function Invoke-RepoFlow {
     }
 
     switch ($commandName) {
+        'queue/run' {
+            if ([string]::IsNullOrWhiteSpace($Manifest)) {
+                throw "'queue run' requires -Manifest."
+            }
+
+            Invoke-RepoFlowQueueRunWorkflow `
+                -Manifest $Manifest `
+                -Continuous:$Continuous `
+                -Apply:$Apply `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'queue/resume' {
+            if ([string]::IsNullOrWhiteSpace($Manifest)) {
+                throw "'queue resume' requires -Manifest."
+            }
+
+            Invoke-RepoFlowQueueResumeWorkflow `
+                -Manifest $Manifest `
+                -Continuous:$Continuous `
+                -Apply:$Apply `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'queue/pause' {
+            if ([string]::IsNullOrWhiteSpace($Manifest)) {
+                throw "'queue pause' requires -Manifest."
+            }
+
+            if ($Continuous) {
+                throw "'queue pause' does not accept -Continuous."
+            }
+
+            Invoke-RepoFlowQueuePauseWorkflow `
+                -Manifest $Manifest `
+                -Apply:$Apply `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'queue/stop' {
+            if ([string]::IsNullOrWhiteSpace($Manifest)) {
+                throw "'queue stop' requires -Manifest."
+            }
+
+            if ($Continuous) {
+                throw "'queue stop' does not accept -Continuous."
+            }
+
+            Invoke-RepoFlowQueueStopWorkflow `
+                -Manifest $Manifest `
+                -Apply:$Apply `
+                -ConfigPath $ConfigPath
+            return
+        }
+
         'issue/sync' {
             Invoke-RepoFlowIssueSyncWorkflow `
                 -Apply:$Apply `

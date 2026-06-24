@@ -31,6 +31,7 @@ RepoFlow combines several repetitive repository tasks behind one command:
 - recovering from pre-commit hook failures with one focused agent correction;
 - continuing the same pull request from a trusted PR comment;
 - safely cleaning merged branches;
+- running explicit ordered issue queues with durable resume state;
 - merging only after explicit human review and confirmation.
 
 The goal is not to remove human review. The goal is to automate the mechanical work around it.
@@ -85,10 +86,12 @@ repo-flow/
 ├── rf.ps1
 ├── test-repo-flow.ps1
 ├── repo-flow.example.json
+├── queue.example.json
 ├── .gitignore
 ├── README.md
 ├── docs/
-│   └── GITHUB-SETUP.md
+│   ├── GITHUB-SETUP.md
+│   └── ISSUE-QUEUE.md
 ├── scripts/
 │   └── RepoFlow/
 │       ├── RepoFlow.psd1
@@ -468,6 +471,43 @@ rf issue resume -Number 67 -Apply
 `issue resume` reconstructs the workflow from persisted run state and validates the configured repository, issue branch, local and remote heads, pull request, PR head SHA, CI status, trusted review comments, and working tree. It never creates a duplicate branch or pull request. Ambiguous or conflicting state stops with an actionable error instead of guessing.
 
 The command can continue after an interrupted agent run, commit or push failure, missing PR checkpoint, pending or failed CI, and new trusted top-level PR feedback. Merged and closed pull requests return a terminal result. The existing `issue continue ... -Resume` form remains available for scripts that explicitly resume one interrupted review-comment agent run.
+
+### Run an explicit issue queue
+
+Create a queue manifest from [`queue.example.json`](queue.example.json). The
+manifest defines the complete order; RepoFlow never guesses the next issue
+from GitHub.
+
+Validate and print the full plan:
+
+```powershell
+rf queue run -Manifest .\queue.json
+```
+
+Start the current task:
+
+```powershell
+rf queue run -Manifest .\queue.json -Apply
+```
+
+Resume from the persisted checkpoint and continue between completed tasks:
+
+```powershell
+rf queue resume -Manifest .\queue.json -Continuous -Apply
+```
+
+The queue reuses `issue run`, deterministic `issue resume`, passing CI, local
+validation, and the bounded PR-review loop. It pauses at every explicit merge
+gate and never merges automatically. After the operator merges with
+`rf pr merge`, resume the queue to confirm cleanup and advance.
+
+Open dependencies are allowed only when the dependency is an earlier task for
+the same resolved repository. Failures, ambiguous state, CI/review limits,
+manual-review outcomes, pause requests, and stop requests keep the current
+position instead of silently skipping work.
+
+See [Issue queue and continuous runner](docs/ISSUE-QUEUE.md) for the manifest
+contract, state schema, pause/stop semantics, and recovery rules.
 
 ### Continue an open PR from a comment
 

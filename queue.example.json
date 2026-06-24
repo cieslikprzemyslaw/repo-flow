@@ -1,0 +1,18 @@
+{
+  "$schema": "./scripts/RepoFlow/Schemas/queue-manifest.v1.schema.json",
+  "schemaVersion": 1,
+  "name": "repo-flow implementation queue",
+  "repository": "flow",
+  "tasks": [
+    {
+      "issueNumber": 11,
+      "ciMode": "require-passing",
+      "automatedReview": true
+    },
+    {
+      "issueNumber": 12,
+      "ciMode": "require-passing",
+      "automatedReview": true
+    }
+  ]
+}
