@@ -61,6 +61,7 @@ Write-Host "PowerShell syntax checks passed for $($files.Count) file(s)."
 
 $jsonPaths = [System.Collections.Generic.List[string]]::new()
 $jsonPaths.Add((Join-Path $root 'repo-flow.example.json'))
+$jsonPaths.Add((Join-Path $root 'queue.example.json'))
 $jsonPaths.Add((Join-Path $root 'scripts/RepoFlow/repo-flow.schema.json'))
 
 foreach ($schemaPath in @(

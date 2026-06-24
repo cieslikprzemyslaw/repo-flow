@@ -101,13 +101,17 @@ function New-RepoFlowStateDocument {
         [string]$ActiveRepository = $null,
 
         [AllowEmptyCollection()]
-        [object[]]$Runs = @()
+        [object[]]$Runs = @(),
+
+        [AllowEmptyCollection()]
+        [object[]]$Queues = @()
     )
 
     return [pscustomobject][ordered]@{
-        schemaVersion = 2
+        schemaVersion = 3
         activeRepository = $ActiveRepository
         runs = @($Runs)
+        queues = @($Queues)
     }
 }
 
@@ -155,12 +159,13 @@ function Read-RepoFlowStateDocument {
 
         return New-RepoFlowStateDocument `
             -ActiveRepository ([string]$activeRepository) `
-            -Runs @()
+            -Runs @() `
+            -Queues @()
     }
 
     Assert-RepoFlowAllowedProperties `
         -Object $state `
-        -Allowed @('schemaVersion', 'activeRepository', 'runs') `
+        -Allowed @('schemaVersion', 'activeRepository', 'runs', 'queues') `
         -Path '$'
 
     $schemaVersion = Get-RepoFlowProperty `
@@ -168,7 +173,7 @@ function Read-RepoFlowStateDocument {
         -Name 'schemaVersion' `
         -Default $null
 
-    if ($schemaVersion -ne 2) {
+    if ($schemaVersion -notin @(2, 3)) {
         throw (
             'RepoFlow state schema is unsupported. Move or delete the file ' +
             "and retry: $statePath"
@@ -183,6 +188,10 @@ function Read-RepoFlowStateDocument {
         -Object $state `
         -Name 'runs' `
         -Default @()
+    $queues = Get-RepoFlowProperty `
+        -Object $state `
+        -Name 'queues' `
+        -Default @()
 
     if (-not [string]::IsNullOrWhiteSpace([string]$activeRepository)) {
         Assert-RepoFlowString `
@@ -196,6 +205,9 @@ function Read-RepoFlowStateDocument {
     Assert-RepoFlowArray `
         -Value $runs `
         -Path '$.runs'
+    Assert-RepoFlowArray `
+        -Value $queues `
+        -Path '$.queues'
 
     try {
         $runRecords = @($runs)
@@ -213,9 +225,26 @@ function Read-RepoFlowStateDocument {
         )
     }
 
+    try {
+        $queueRecords = @($queues)
+
+        for ($index = 0; $index -lt $queueRecords.Count; $index++) {
+            Assert-RepoFlowQueueRecord `
+                -Record $queueRecords[$index] `
+                -Path ("$.queues[{0}]" -f $index)
+        }
+    }
+    catch {
+        throw (
+            'RepoFlow state contains an invalid or incompatible queue record. ' +
+            "Move or delete the file and retry: $statePath"
+        )
+    }
+
     return New-RepoFlowStateDocument `
         -ActiveRepository $activeRepository `
-        -Runs @($runs)
+        -Runs @($runs) `
+        -Queues @($queues)
 }
 
 function Write-RepoFlowStateDocument {
@@ -311,7 +340,8 @@ function Remove-RepoFlowStateFileIfEmpty {
         if (
             $null -ne $document -and
             [string]::IsNullOrWhiteSpace([string]$document.activeRepository) -and
-            @($document.runs).Count -eq 0
+            @($document.runs).Count -eq 0 -and
+            @($document.queues).Count -eq 0
         ) {
             Remove-Item -LiteralPath $statePath -Force
             return $true

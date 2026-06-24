@@ -153,6 +153,7 @@ function Invoke-RepoFlowCli {
         'skipcreates' = 'SkipCreates'
         'lastprcomment' = 'LastPrComment'
         'resume' = 'Resume'
+        'continuous' = 'Continuous'
     }
 
     $valueOptions = @{
@@ -169,6 +170,7 @@ function Invoke-RepoFlowCli {
         'repository' = 'Repo'
         'repositoryname' = 'Repo'
         'configpath' = 'ConfigPath'
+        'manifest' = 'Manifest'
     }
 
     for ($index = 0; $index -lt $tokens.Count; $index++) {
@@ -314,6 +316,7 @@ function Invoke-RepoFlowCli {
         repo = @('list', 'current', 'use', 'reset')
         doctor = @('run')
         review = @('run')
+        queue = @('run', 'resume', 'pause', 'stop')
     }
 
     if ($invokeParameters.ContainsKey('Area')) {

@@ -130,6 +130,24 @@ Resume never creates a duplicate branch or pull request and does not replay comp
 
 Pending and failed CI remain resumable. Merged and closed PRs produce a terminal result. A new trusted top-level PR comment can start the existing review-feedback continuation without requiring the operator to guess its ID.
 
+### Execute an ordered issue queue
+
+```powershell
+.\repo-flow.ps1 queue run -Manifest .\queue.json
+.\repo-flow.ps1 queue run -Manifest .\queue.json -Continuous -Apply
+.\repo-flow.ps1 queue resume -Manifest .\queue.json -Continuous -Apply
+.\repo-flow.ps1 queue pause -Manifest .\queue.json -Apply
+.\repo-flow.ps1 queue stop -Manifest .\queue.json -Apply
+```
+
+The queue manifest is the only source of task order. RepoFlow processes one
+issue at a time, persists task checkpoints, reuses deterministic issue resume,
+requires passing CI, invokes bounded automated review, and pauses at the
+human-confirmed merge gate. It never skips a failed task or merges a PR.
+
+See [`ISSUE-QUEUE.md`](ISSUE-QUEUE.md) for the versioned manifest, dependency
+ordering, state schema, continuous-mode behaviour, and recovery rules.
+
 ### Continue an open PR from review feedback
 
 Use the newest trusted top-level PR comment:

@@ -5,6 +5,10 @@ $privateFiles = @(
     'Help.ps1',
     'Command.ps1',
     'Configuration.ps1',
+    'Queue.Manifest.ps1',
+    'Queue.State.Validation.ps1',
+    'Queue.State.Records.ps1',
+    'Queue.State.Tasks.ps1',
     'Repositories.ps1',
     'Markdown.ps1',
     'GitHub.ps1',
@@ -63,7 +67,13 @@ $privateFiles = @(
     'IssueResume.GitHub.ps1',
     'IssueResume.Ci.ps1',
     'IssueResume.Workflow.ps1',
-    'Workflows.ps1'
+    'Workflows.ps1',
+    'Queue.Context.ps1',
+    'Queue.Plan.ps1',
+    'Queue.Task.Support.ps1',
+    'Queue.Task.ps1',
+    'Queue.Execution.ps1',
+    'Queue.Commands.ps1'
 )
 
 foreach ($file in $privateFiles) {
