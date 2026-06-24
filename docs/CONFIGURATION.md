@@ -64,7 +64,9 @@ Documentation is kept in this file, while property descriptions are also stored 
       "OWNER",
       "MEMBER",
       "COLLABORATOR"
-    ]
+    ],
+    "maxReviewCycles": 3,
+    "maxRepairCycles": 2
   }
 }
 ```
@@ -378,6 +380,30 @@ Supported values in v0.1 are:
 - `COLLABORATOR`
 
 This is one trust check, not a replacement for displaying and manually confirming the comment.
+
+### `maxReviewCycles`
+
+```json
+"maxReviewCycles": 3
+```
+
+Maximum number of exact-head automated review requests in one `pr review`
+workflow. The allowed range is 1 to 10.
+
+### `maxRepairCycles`
+
+```json
+"maxRepairCycles": 2
+```
+
+Maximum number of coding-agent repairs in one `pr review` workflow. Use `0`
+to allow review and pass/manual-review handling without automatic repair. The
+allowed range is 0 to 10.
+
+`pr review` requires passing checks when `ci.mode` is `require-passing`.
+Selecting `observe` or `skip` explicitly allows a review request without a
+passing-CI gate, but every performed repair still observes the new head's CI
+before another review request.
 
 ## Recommended profiles
 

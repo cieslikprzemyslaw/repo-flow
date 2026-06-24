@@ -252,6 +252,26 @@ exact current PR head and wait for a matching trusted result. Configuration,
 trust rules, timeout behaviour, and the external bridge responsibilities are
 documented in [`AUTOMATED-REVIEW-BRIDGE.md`](AUTOMATED-REVIEW-BRIDGE.md).
 
+## Bounded PR review loop
+
+`rf pr review -Number <pr> -Apply` orchestrates the transport into a bounded
+review/repair workflow:
+
+1. validate the open PR, checked-out branch, exact head, clean tree, and CI;
+2. publish or reuse a request for that exact head;
+3. consume only the matching trusted result;
+4. record `pass`, or pause on `manual_review`;
+5. for `changes_required`, pass only blockers to the configured coding agent
+   as untrusted task data;
+6. run local validation, commit, push, wait for the new head, observe CI, and
+   request a fresh exact-head review.
+
+The original issue remains authoritative. Warnings do not expand repair scope.
+Repeated blocker fingerprints stop for manual review. Review and repair counts
+are persisted and bounded by `reviewFeedback.maxReviewCycles` and
+`reviewFeedback.maxRepairCycles`. No path in this workflow approves or merges
+the PR.
+
 ## Validation
 
 Run all local syntax, JSON, and Pester checks:

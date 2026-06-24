@@ -212,6 +212,19 @@ function Invoke-RepoFlow {
             return
         }
 
+        'pr/review' {
+            if ($Number -le 0) {
+                throw "'pr review' requires -Number."
+            }
+
+            Invoke-RepoFlowPrReviewWorkflow `
+                -Number $Number `
+                -Apply:$Apply `
+                -Repo $Repo `
+                -ConfigPath $ConfigPath
+            return
+        }
+
         'pr/ready' {
             if ($Number -le 0) {
                 throw "'pr ready' requires -Number."

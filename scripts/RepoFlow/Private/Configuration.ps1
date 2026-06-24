@@ -291,7 +291,9 @@ function Read-RepoFlowConfiguration {
     Assert-RepoFlowAllowedProperties -Object $reviewFeedback -Path '$.reviewFeedback' -Allowed @(
         'enabled',
         'confirmBeforeRun',
-        'trustedAssociations'
+        'trustedAssociations',
+        'maxReviewCycles',
+        'maxRepairCycles'
     )
 
     $manifestPath = Get-RepoFlowProperty -Object $issues -Name 'manifestPath' -Default './issues-manifest.json'
@@ -331,6 +333,8 @@ function Read-RepoFlowConfiguration {
     $feedbackEnabled = Get-RepoFlowProperty -Object $reviewFeedback -Name 'enabled' -Default $true
     $confirmBeforeRun = Get-RepoFlowProperty -Object $reviewFeedback -Name 'confirmBeforeRun' -Default $true
     $trustedAssociations = Get-RepoFlowProperty -Object $reviewFeedback -Name 'trustedAssociations' -Default @('OWNER')
+    $maxReviewCycles = Get-RepoFlowProperty -Object $reviewFeedback -Name 'maxReviewCycles' -Default 3
+    $maxRepairCycles = Get-RepoFlowProperty -Object $reviewFeedback -Name 'maxRepairCycles' -Default 2
 
     Assert-RepoFlowString -Value $manifestPath -Path '$.issues.manifestPath'
 
@@ -369,6 +373,8 @@ function Read-RepoFlowConfiguration {
     Assert-RepoFlowBoolean -Value $feedbackEnabled -Path '$.reviewFeedback.enabled'
     Assert-RepoFlowBoolean -Value $confirmBeforeRun -Path '$.reviewFeedback.confirmBeforeRun'
     Assert-RepoFlowArray -Value $trustedAssociations -Path '$.reviewFeedback.trustedAssociations'
+    Assert-RepoFlowIntegerRange -Value $maxReviewCycles -Minimum 1 -Maximum 10 -Path '$.reviewFeedback.maxReviewCycles'
+    Assert-RepoFlowIntegerRange -Value $maxRepairCycles -Minimum 0 -Maximum 10 -Path '$.reviewFeedback.maxRepairCycles'
 
     foreach ($associationValue in @($trustedAssociations)) {
         Assert-RepoFlowString -Value $associationValue -Path '$.reviewFeedback.trustedAssociations[]'
@@ -450,6 +456,8 @@ function Read-RepoFlowConfiguration {
                 $trustedAssociations |
                 ForEach-Object { [string]$_ }
             )
+            maxReviewCycles = [int]$maxReviewCycles
+            maxRepairCycles = [int]$maxRepairCycles
         }
     }
 
@@ -551,6 +559,24 @@ function Assert-RepoFlowConfiguration {
 
     Assert-RepoFlowBoolean -Value $Config.reviewFeedback.enabled -Path '$.reviewFeedback.enabled'
     Assert-RepoFlowBoolean -Value $Config.reviewFeedback.confirmBeforeRun -Path '$.reviewFeedback.confirmBeforeRun'
+    $maxReviewCycles = Get-RepoFlowProperty `
+        -Object $Config.reviewFeedback `
+        -Name 'maxReviewCycles' `
+        -Default 3
+    $maxRepairCycles = Get-RepoFlowProperty `
+        -Object $Config.reviewFeedback `
+        -Name 'maxRepairCycles' `
+        -Default 2
+    Assert-RepoFlowIntegerRange `
+        -Value $maxReviewCycles `
+        -Minimum 1 `
+        -Maximum 10 `
+        -Path '$.reviewFeedback.maxReviewCycles'
+    Assert-RepoFlowIntegerRange `
+        -Value $maxRepairCycles `
+        -Minimum 0 `
+        -Maximum 10 `
+        -Path '$.reviewFeedback.maxRepairCycles'
 
     $trusted = @($Config.reviewFeedback.trustedAssociations)
 

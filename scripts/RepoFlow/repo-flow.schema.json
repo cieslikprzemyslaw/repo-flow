@@ -381,7 +381,9 @@
               "COLLABORATOR"
             ]
           }
-        }
+        },
+        "maxReviewCycles": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "maxRepairCycles": { "type": "integer", "minimum": 0, "maximum": 10 }
       }
     }
   }
