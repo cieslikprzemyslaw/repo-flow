@@ -10,6 +10,7 @@ Describe 'RepoFlow help' {
             $helpText | Should -Match 'issue run'
             $helpText | Should -Match 'pr merge'
             $helpText | Should -Match 'pr repair'
+            $helpText | Should -Match 'review run'
         }
 
         It 'shows command-specific merge help' {
@@ -29,6 +30,13 @@ Describe 'RepoFlow help' {
             $helpText = Get-RepoFlowHelpText -Topic 'pr repair'
             $helpText | Should -Match 'Repairs a failed, open pull request'
             $helpText | Should -Match 'plan-only by default'
+        }
+
+        It 'shows automated review transport help' {
+            $helpText = Get-RepoFlowHelpText -Topic 'review run'
+            $helpText | Should -Match 'idempotent automated-review request'
+            $helpText | Should -Match 'never starts a coding agent'
+            $helpText | Should -Match 'pauses the persisted run safely'
         }
 
         It 'shows positional repository use syntax' {

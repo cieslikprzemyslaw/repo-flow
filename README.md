@@ -525,6 +525,18 @@ Human-readable Markdown may accompany the machine-readable JSON. Payload text re
 
 See [`docs/AUTOMATED-REVIEW-CONTRACT.md`](docs/AUTOMATED-REVIEW-CONTRACT.md) for the v1 fields, examples, limits, matching rules, and security boundary.
 
+### GitHub review bridge transport
+
+```powershell
+rf review run -Number 24
+rf review run -Number 24 -Apply
+```
+
+The command publishes or reuses one machine-readable request for the exact PR
+head and waits for a matching trusted result. It never starts an agent or
+merges the PR. See
+[`docs/AUTOMATED-REVIEW-BRIDGE.md`](docs/AUTOMATED-REVIEW-BRIDGE.md).
+
 ### Mark a PR ready
 Plan:
 

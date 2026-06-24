@@ -11,6 +11,7 @@ function Invoke-RepoFlow {
             'config',
             'repo',
             'doctor',
+            'review',
             'help'
         )]
         [AllowNull()]
@@ -156,6 +157,19 @@ function Invoke-RepoFlow {
                 -Resume:$Resume `
                 -Apply:$Apply `
                 -CiMode $CiMode `
+                -Repo $Repo `
+                -ConfigPath $ConfigPath
+            return
+        }
+
+        'review/run' {
+            if ($Number -le 0) {
+                throw "'review run' requires -Number."
+            }
+
+            Invoke-RepoFlowAutomatedReviewWorkflow `
+                -Number $Number `
+                -Apply:$Apply `
                 -Repo $Repo `
                 -ConfigPath $ConfigPath
             return

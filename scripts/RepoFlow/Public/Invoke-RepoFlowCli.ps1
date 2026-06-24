@@ -313,6 +313,7 @@ function Invoke-RepoFlowCli {
         config = @('validate', 'show')
         repo = @('list', 'current', 'use', 'reset')
         doctor = @('run')
+        review = @('run')
     }
 
     if ($invokeParameters.ContainsKey('Area')) {

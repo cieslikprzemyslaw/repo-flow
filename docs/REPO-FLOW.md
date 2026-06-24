@@ -245,6 +245,13 @@ CI polling emits concise check transitions, for example `Validate: pending -> pa
 
 The versioned request/result format used by future automated review workflows is documented in [`AUTOMATED-REVIEW-CONTRACT.md`](AUTOMATED-REVIEW-CONTRACT.md). The current task defines schemas, markers, parsing, matching, replay checks, limits, and truncation rules only; it does not publish or poll GitHub comments.
 
+## Automated review transport
+
+Use `rf review run -Number <pr> -Apply` to publish or reuse a request for the
+exact current PR head and wait for a matching trusted result. Configuration,
+trust rules, timeout behaviour, and the external bridge responsibilities are
+documented in [`AUTOMATED-REVIEW-BRIDGE.md`](AUTOMATED-REVIEW-BRIDGE.md).
+
 ## Validation
 
 Run all local syntax, JSON, and Pester checks:

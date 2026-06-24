@@ -183,3 +183,5 @@ A valid payload proves only that its structure and binding are acceptable. It do
 ## Versioning
 
 Markers and envelopes carry the same major contract version. Version `v1` consumers reject unknown versions rather than guessing compatibility. A breaking field or semantic change requires a new marker and schema version.
+
+The GitHub comment transport and external bridge responsibilities are documented in [`AUTOMATED-REVIEW-BRIDGE.md`](AUTOMATED-REVIEW-BRIDGE.md).
