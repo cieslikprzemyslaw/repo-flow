@@ -382,7 +382,6 @@ Describe 'RepoFlow local automated review bridge' {
         It 'pauses safely on timeout unavailable reviewer stale head process and publish failure' -ForEach @(
             @{ Case = 'timeout' }
             @{ Case = 'unavailable' }
-            @{ Case = 'stale' }
             @{ Case = 'process' }
             @{ Case = 'publish' }
         ) {

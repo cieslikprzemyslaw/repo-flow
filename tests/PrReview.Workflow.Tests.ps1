@@ -256,7 +256,7 @@ Describe 'RepoFlow bounded PR review workflow' {
         }
 
         It 'runs the local bridge result through the automated review loop' {
-            $script:config.reviewer = [pscustomobject]@{
+            $reviewer = [pscustomobject]@{
                 mode = 'local'
                 provider = 'codex'
                 command = 'codex'
@@ -266,6 +266,13 @@ Describe 'RepoFlow bounded PR review workflow' {
                 noActivityWarningSeconds = 180
                 timeoutSeconds = 900
             }
+
+            $script:config |
+                Add-Member `
+                    -MemberType NoteProperty `
+                    -Name reviewer `
+                    -Value $reviewer `
+                    -Force
             $script:records = @{}
             $script:comments = [System.Collections.Generic.List[object]]::new()
             $script:nextCommentId = 1000
@@ -333,7 +340,12 @@ Describe 'RepoFlow bounded PR review workflow' {
                 [pscustomobject]@{ Path = 'lock'; Stream = $null }
             }
             Mock Exit-RepoFlowLocalReviewBridgeLock {}
-            Mock Get-RepoFlowLocalGitHeadSha { [string]$script:pullRequest.headRefOid }
+            Mock Get-RepoFlowCurrentBranch {
+                [string]$script:pullRequest.headRefName
+            }
+            Mock Get-RepoFlowLocalGitHeadSha {
+                [string]$script:pullRequest.headRefOid
+            }
             Mock Get-RepoFlowWorkingTreeStatus { '' }
             Mock Invoke-RepoFlowLocalReviewerAgent {
                 $reviewerId = Get-RepoFlowLocalReviewerId `
