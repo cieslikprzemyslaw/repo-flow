@@ -5,6 +5,12 @@ BeforeDiscovery {
 
 Describe 'RepoFlow bounded PR review workflow' {
     InModuleScope RepoFlow {
+        BeforeAll {
+            $script:realAutomatedReviewWorkflow = (
+                Get-Command Invoke-RepoFlowAutomatedReviewWorkflow
+            ).ScriptBlock
+        }
+
         BeforeEach {
             $script:pullRequest = [pscustomobject]@{
                 number = 25
@@ -245,6 +251,233 @@ Describe 'RepoFlow bounded PR review workflow' {
             Invoke-RepoFlowPrReviewWorkflow -Number 25 -Apply
 
             Should -Invoke Complete-RepoFlowRunRecord -Times 1 -Exactly
+            Should -Invoke Invoke-RepoFlowPrReviewRepairCycle -Times 0 -Exactly
+            Should -Invoke Invoke-RepoFlowPrMergeWorkflow -Times 0 -Exactly
+        }
+
+        It 'runs the local bridge result through the automated review loop' {
+            $script:config.reviewer = [pscustomobject]@{
+                mode = 'local'
+                provider = 'codex'
+                command = 'codex'
+                model = 'gpt-5.5'
+                reasoningEffort = 'high'
+                heartbeatSeconds = 15
+                noActivityWarningSeconds = 180
+                timeoutSeconds = 900
+            }
+            $script:records = @{}
+            $script:comments = [System.Collections.Generic.List[object]]::new()
+            $script:nextCommentId = 1000
+            $script:publishedRequest = $null
+
+            Mock Invoke-RepoFlowAutomatedReviewWorkflow {
+                param(
+                    [int]$Number,
+                    [switch]$Apply,
+                    [string]$ConfigPath,
+                    [string]$Repo
+                )
+
+                & $script:realAutomatedReviewWorkflow `
+                    -Number $Number `
+                    -Apply:$Apply `
+                    -ConfigPath $ConfigPath `
+                    -Repo $Repo
+            }
+            Mock Get-RepoFlowPullRequestFiles {
+                @([pscustomobject]@{
+                    filename = 'scripts/RepoFlow/Private/ReviewBridge.Local.ps1'
+                    status = 'modified'
+                })
+            }
+            Mock Get-RepoFlowAuthenticatedGitHubLogin { 'repo-owner' }
+            Mock Get-RepoFlowAllPullRequestComments { @($script:comments) }
+            Mock New-RepoFlowPullRequestComment {
+                param($PullRequestNumber, $Repository, $Body)
+
+                $script:nextCommentId++
+                $marker = if ($Body -match 'rf-review-request:v1') {
+                    $script:publishedRequest = ConvertFrom-RepoFlowReviewComment `
+                        -Text $Body `
+                        -Kind request
+                    'request'
+                }
+                else {
+                    'result'
+                }
+                $comment = [pscustomobject]@{
+                    id = $script:nextCommentId
+                    body = $Body
+                    created_at = [DateTimeOffset]::UtcNow.AddMinutes(1).ToString('o')
+                    author_association = 'OWNER'
+                    issue_url = "https://api.github.test/repos/owner/repo/issues/$PullRequestNumber"
+                    html_url = "https://example.test/pull/$PullRequestNumber#issuecomment-$script:nextCommentId"
+                    marker = $marker
+                    user = [pscustomobject]@{
+                        login = 'repo-owner'
+                        type = 'User'
+                    }
+                }
+                $script:comments.Add($comment)
+                return $comment
+            }
+            Mock Get-RepoFlowPullRequestComment {
+                param($CommentId, $Repository)
+
+                return @($script:comments |
+                    Where-Object { [long]$_.id -eq [long]$CommentId } |
+                    Select-Object -First 1)
+            }
+            Mock Enter-RepoFlowLocalReviewBridgeLock {
+                [pscustomobject]@{ Path = 'lock'; Stream = $null }
+            }
+            Mock Exit-RepoFlowLocalReviewBridgeLock {}
+            Mock Get-RepoFlowLocalGitHeadSha { [string]$script:pullRequest.headRefOid }
+            Mock Get-RepoFlowWorkingTreeStatus { '' }
+            Mock Invoke-RepoFlowLocalReviewerAgent {
+                $reviewerId = Get-RepoFlowLocalReviewerId `
+                    -Reviewer $script:config.reviewer
+                $result = [pscustomobject][ordered]@{
+                    contractVersion = '1'
+                    kind = 'review_result'
+                    requestId = [string]$script:publishedRequest.requestId
+                    reviewedHeadSha = [string]$script:publishedRequest.headSha
+                    verdict = 'pass'
+                    blockers = @()
+                    warnings = @()
+                    reviewFlags = [pscustomobject]@{
+                        testsReviewed = $true
+                        scopeReviewed = $true
+                        securityReviewed = $true
+                    }
+                    reviewerId = $reviewerId
+                    completedAtUtc = [DateTimeOffset]::UtcNow.AddMinutes(1).ToString('o')
+                }
+
+                [pscustomobject]@{
+                    ExitCode = 0
+                    TimedOut = $false
+                    Text = ''
+                    FinalMessage = ($result | ConvertTo-Json -Depth 20)
+                }
+            }
+            Mock Get-RepoFlowRunRecord {
+                param($ConfigPath, $RunId)
+
+                if ($script:records.ContainsKey([string]$RunId)) {
+                    return $script:records[[string]$RunId]
+                }
+
+                if ([string]$RunId -eq [string]$script:runRecord.runId) {
+                    return $script:runRecord
+                }
+
+                return $null
+            }
+            Mock Get-RepoFlowRunRecords { @($script:records.Values) }
+            Mock Start-RepoFlowRunRecord {
+                param(
+                    [string]$ConfigPath,
+                    [string]$RepositoryRoot,
+                    [string]$Repository,
+                    [string]$RepositorySlug,
+                    [string]$Operation,
+                    [int]$IssueNumber,
+                    [string]$Branch,
+                    [int]$PullRequestNumber = 0,
+                    [string]$PrCommentId = $null,
+                    [string]$BaseSha,
+                    [string]$HeadSha,
+                    [string]$Phase,
+                    [string]$Provider,
+                    [string]$Model,
+                    [int]$ReviewAttemptCount = 0,
+                    [int]$RepairAttemptCount = 0,
+                    [string]$RunId = $null
+                )
+
+                $record = [pscustomobject]@{
+                    runId = $RunId
+                    operation = $Operation
+                    status = 'running'
+                    repositoryRoot = $RepositoryRoot
+                    repository = $Repository
+                    repositorySlug = $RepositorySlug
+                    issueNumber = $IssueNumber
+                    branch = $Branch
+                    pullRequestNumber = $PullRequestNumber
+                    prCommentId = $PrCommentId
+                    baseSha = $BaseSha
+                    headSha = $HeadSha
+                    currentPhase = $Phase
+                    lastSafePhase = $Phase
+                    provider = $Provider
+                    model = $Model
+                    reviewAttemptCount = $ReviewAttemptCount
+                    repairAttemptCount = $RepairAttemptCount
+                    completedAtUtc = $null
+                    terminalOutcome = $null
+                    pauseReason = $null
+                }
+                $script:records[[string]$RunId] = $record
+                return $record
+            }
+            Mock Set-RepoFlowRunCheckpoint {
+                param(
+                    [string]$ConfigPath,
+                    [string]$RunId,
+                    [string]$CurrentPhase,
+                    [string]$SafePhase = $null
+                )
+
+                if ($script:records.ContainsKey([string]$RunId)) {
+                    $script:records[[string]$RunId].status = 'running'
+                    $script:records[[string]$RunId].currentPhase = $CurrentPhase
+                    if (-not [string]::IsNullOrWhiteSpace($SafePhase)) {
+                        $script:records[[string]$RunId].lastSafePhase = $SafePhase
+                    }
+                }
+            }
+            Mock Complete-RepoFlowRunRecord {
+                param($ConfigPath, $RunId, $Outcome)
+
+                if ($script:records.ContainsKey([string]$RunId)) {
+                    $script:records[[string]$RunId].status = 'completed'
+                    $script:records[[string]$RunId].terminalOutcome = $Outcome
+                    $script:records[[string]$RunId].completedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+                }
+            }
+            Mock Set-RepoFlowRunPaused {
+                param($ConfigPath, $RunId, $CurrentPhase, $PauseReason)
+
+                if ($script:records.ContainsKey([string]$RunId)) {
+                    $script:records[[string]$RunId].status = 'paused'
+                    $script:records[[string]$RunId].currentPhase = $CurrentPhase
+                    $script:records[[string]$RunId].pauseReason = $PauseReason
+                }
+            }
+            Mock Invoke-RepoFlowPrReviewRepairCycle {
+                throw 'Repair must not run for a passing local review.'
+            }
+
+            Invoke-RepoFlowPrReviewWorkflow -Number 25 -Apply -Repo repo
+
+            $resultRun = $script:records.Values |
+                Where-Object { [string]$_.operation -eq 'automated-review-result' } |
+                Select-Object -First 1
+            $requestComment = $script:comments |
+                Where-Object { [string]$_.marker -eq 'request' } |
+                Select-Object -First 1
+            $resultComment = $script:comments |
+                Where-Object { [string]$_.marker -eq 'result' } |
+                Select-Object -First 1
+
+            $requestComment | Should -Not -BeNullOrEmpty
+            $resultComment | Should -Not -BeNullOrEmpty
+            $resultRun | Should -Not -BeNullOrEmpty
+            $resultRun.prCommentId | Should -Be ([string]$resultComment.id)
+            Should -Invoke Invoke-RepoFlowLocalReviewerAgent -Times 1 -Exactly
             Should -Invoke Invoke-RepoFlowPrReviewRepairCycle -Times 0 -Exactly
             Should -Invoke Invoke-RepoFlowPrMergeWorkflow -Times 0 -Exactly
         }

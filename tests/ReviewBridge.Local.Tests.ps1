@@ -298,6 +298,7 @@ Describe 'RepoFlow local automated review bridge' {
 
         It 'does not invoke or publish when a matching result already exists' {
             Mock Get-RepoFlowAllPullRequestComments { @([pscustomobject]@{ id = 88 }) }
+            Mock Get-RepoFlowPullRequest { $script:pullRequest }
             Mock Resolve-RepoFlowAutomatedReviewResultComment {
                 [pscustomobject]@{
                     Status = 'accepted'
@@ -320,8 +321,41 @@ Describe 'RepoFlow local automated review bridge' {
             Should -Invoke New-RepoFlowPullRequestComment -Times 0
         }
 
+        It 'returns stale before reusing an existing result when the live head changed' {
+            Mock Get-RepoFlowPullRequest {
+                [pscustomobject]@{
+                    number = 21
+                    state = 'OPEN'
+                    baseRefOid = [string]$script:request.baseSha
+                    headRefOid = ('4' * 40)
+                    headRefName = 'feature/8-review-contract'
+                }
+            }
+            Mock Get-RepoFlowAllPullRequestComments {
+                throw 'Comments must not be read before live head validation.'
+            }
+            Mock Resolve-RepoFlowAutomatedReviewResultComment {
+                throw 'Existing results must not be resolved for a stale head.'
+            }
+            Mock Invoke-RepoFlowLocalReviewerAgent {}
+            Mock New-RepoFlowPullRequestComment {}
+
+            $resolution = Invoke-RepoFlowLocalReviewBridge `
+                -Request $script:request `
+                -Issue $script:issue `
+                -PullRequest $script:pullRequest `
+                -Context $script:context `
+                -StateConfigPath 'C:\repo\.repo-flow.json'
+
+            $resolution.Status | Should -Be stale
+            Should -Invoke Get-RepoFlowAllPullRequestComments -Times 0
+            Should -Invoke Invoke-RepoFlowLocalReviewerAgent -Times 0
+            Should -Invoke New-RepoFlowPullRequestComment -Times 0
+        }
+
         It 'reconciles a duplicate concurrent execution by waiting for the active reviewer' {
             Mock Get-RepoFlowAllPullRequestComments { @() }
+            Mock Get-RepoFlowPullRequest { $script:pullRequest }
             Mock Resolve-RepoFlowAutomatedReviewResultComment {
                 [pscustomobject]@{ Status = 'none'; Comment = $null; Result = $null }
             }

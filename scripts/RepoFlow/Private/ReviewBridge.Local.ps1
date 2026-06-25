@@ -23,13 +23,29 @@ function Invoke-RepoFlowLocalReviewBridge {
     }
 
     $repository = [string]$Request.repository
+    $livePullRequest = Get-RepoFlowPullRequest `
+        -Number ([int]$PullRequest.number) `
+        -Repository $repository
+    if (
+        [string]$livePullRequest.state -ne 'OPEN' -or
+        -not [string]::Equals([string]$livePullRequest.baseRefOid, [string]$Request.baseSha, [System.StringComparison]::OrdinalIgnoreCase) -or
+        -not [string]::Equals([string]$livePullRequest.headRefOid, [string]$Request.headSha, [System.StringComparison]::OrdinalIgnoreCase)
+    ) {
+        return [pscustomobject]@{
+            Status = 'stale'
+            Comment = $null
+            Result = $null
+            Reason = 'The pull-request state, base, or head changed.'
+        }
+    }
+
     $comments = @(Get-RepoFlowAllPullRequestComments `
         -PullRequestNumber ([int]$PullRequest.number) `
         -Repository $repository)
     $existingResolution = Resolve-RepoFlowAutomatedReviewResultComment `
         -Request $Request `
         -Comments $comments `
-        -CurrentHeadSha ([string]$PullRequest.headRefOid) `
+        -CurrentHeadSha ([string]$livePullRequest.headRefOid) `
         -Config $Context.Config `
         -ProcessedRequestIds @()
 
@@ -54,12 +70,12 @@ function Invoke-RepoFlowLocalReviewBridge {
             return $null
         }
 
-        Assert-RepoFlowLocalReviewScope -Request $Request -PullRequest $PullRequest
+        Assert-RepoFlowLocalReviewScope -Request $Request -PullRequest $livePullRequest
         $runId = Initialize-RepoFlowLocalReviewBridgeRun `
             -ConfigPath $StateConfigPath `
             -Context $Context `
             -Issue $Issue `
-            -PullRequest $PullRequest `
+            -PullRequest $livePullRequest `
             -Request $Request `
             -Reviewer $reviewer
 
@@ -69,7 +85,7 @@ function Invoke-RepoFlowLocalReviewBridge {
         $prompt = New-RepoFlowLocalReviewerPrompt `
             -Request $Request `
             -Issue $Issue `
-            -PullRequest $PullRequest `
+            -PullRequest $livePullRequest `
             -ReviewerId $reviewerId
 
         Set-RepoFlowRunCheckpoint `
