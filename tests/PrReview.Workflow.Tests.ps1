@@ -112,6 +112,7 @@ Describe 'RepoFlow bounded PR review workflow' {
             Mock Complete-RepoFlowRunRecord { return }
             Mock Set-RepoFlowPrReviewLoopPaused { return }
             Mock Invoke-RepoFlowAutomatedReviewWorkflow { return }
+            Mock Invoke-RepoFlowPrRepairWorkflow { return }
             Mock Get-RepoFlowRunRecord { $script:runRecord }
             Mock Get-RepoFlowReviewBlockerFingerprint { 'f' * 64 }
             Mock Test-RepoFlowReviewBlockerFingerprintRecorded { $false }
@@ -121,6 +122,58 @@ Describe 'RepoFlow bounded PR review workflow' {
             }
         }
 
+        It 'hands failed pre-review CI to AI repair before requesting review' {
+            $script:ciReads = 0
+
+            Mock Resolve-RepoFlowPrReviewCiState {
+                $script:ciReads++
+
+                if ($script:ciReads -eq 1) {
+                    return [pscustomobject]@{
+                        Status = 'failed'
+                        Checks = @(
+                            [pscustomobject]@{
+                                name = 'test (ubuntu-latest)'
+                                bucket = 'fail'
+                            }
+                        )
+                    }
+                }
+
+                return [pscustomobject]@{
+                    Status = 'passed'
+                    Checks = @()
+                }
+            }
+
+            Mock Get-RepoFlowAcceptedPrReviewResult {
+                [pscustomobject]@{
+                    Result = $script:passResult
+                }
+            }
+
+            Invoke-RepoFlowPrReviewWorkflow `
+                -Number 25 `
+                -Apply `
+                -Repo repo
+
+            Should -Invoke Invoke-RepoFlowPrRepairWorkflow `
+                -Times 1 `
+                -Exactly `
+                -ParameterFilter {
+                    $Number -eq 25 -and
+                    $Apply -and
+                    $Repo -eq 'repo'
+                }
+
+            Should -Invoke Invoke-RepoFlowAutomatedReviewWorkflow `
+                -Times 1 `
+                -Exactly
+
+            Should -Invoke Resolve-RepoFlowPrReviewCiState `
+                -Times 3 `
+                -Exactly
+        }
         It 'does not resume a paused human-decision state automatically' {
             Mock Initialize-RepoFlowPrReviewLoopRun {
                 $script:runRecord.status = 'paused'

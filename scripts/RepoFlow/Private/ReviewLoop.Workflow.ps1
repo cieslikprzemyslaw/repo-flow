@@ -54,8 +54,41 @@ function Invoke-RepoFlowPrReviewWorkflow {
         -PullRequestNumber $Number `
         -Repository $repository `
         -Config $config `
-        -RequirePassingCi $options.RequirePassingCi `
+        -RequirePassingCi $false `
         -Wait
+
+    if (
+        $options.RequirePassingCi -and
+        [string]$checks.Status -eq 'failed'
+    ) {
+        Write-Host (
+            '[REVIEW] CI failed before automated review; ' +
+            'handing the pull request to the AI repair workflow.'
+        )
+
+        Invoke-RepoFlowPrRepairWorkflow `
+            -Number $Number `
+            -Apply `
+            -ConfigPath $ConfigPath `
+            -Repo $Repo |
+            Out-Null
+
+        $checks = Resolve-RepoFlowPrReviewCiState `
+            -PullRequestNumber $Number `
+            -Repository $repository `
+            -Config $config `
+            -RequirePassingCi $true `
+            -Wait
+    }
+    elseif (
+        $options.RequirePassingCi -and
+        [string]$checks.Status -ne 'passed'
+    ) {
+        throw (
+            "PR review requires passing CI, but the current status is " +
+            "'$($checks.Status)'."
+        )
+    }
 
     $pullRequest = Get-RepoFlowPullRequest `
         -Number $Number `
