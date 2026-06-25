@@ -124,6 +124,35 @@ Describe 'RepoFlow observable progress telemetry' {
             $text | Should -Match 'diff=changed'
         }
 
+        It 'formats detected process telemetry without a format exception' {
+            $heartbeat = [pscustomobject]@{
+                Status = 'active'
+                Elapsed = [timespan]::FromSeconds(10)
+                NoActivity = [timespan]::FromSeconds(2)
+                FingerprintChanged = $false
+            }
+            $tree = [pscustomobject]@{
+                Available = $true
+                ChangedFileCount = 0
+                LastWriteTimeUtc = $null
+            }
+            $process = [pscustomobject]@{
+                Detected = $true
+                Name = 'codex'
+                Id = 123
+                CpuDeltaSeconds = 0.5
+            }
+
+            $text = Format-RepoFlowAgentHeartbeat `
+                -Provider codex `
+                -Phase pr-repair-agent `
+                -Heartbeat $heartbeat `
+                -WorkingTree $tree `
+                -Process $process `
+                -ObservableCommand ''
+
+            $text | Should -Match 'process=codex#123 cpu\+0\.50s'
+        }
         It 'extracts only observable validation commands from supported streams' {
             $codex = @'
 {"type":"item.started","item":{"type":"command_execution","command":"npm test"}}
