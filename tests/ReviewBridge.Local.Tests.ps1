@@ -209,6 +209,22 @@ Describe 'RepoFlow local automated review bridge' {
             Should -Invoke Set-RepoFlowRunCheckpoint -Times 1
         }
 
+        It 'does not read persisted bridge state when no state file exists' {
+            Mock Get-RepoFlowRunRecord {}
+            Mock Set-RepoFlowRunCheckpoint {}
+            Mock Complete-RepoFlowRunRecord {}
+
+            {
+                Complete-RepoFlowLocalReviewBridgeIfPresent `
+                    -ConfigPath (Join-Path $TestDrive 'missing/.repo-flow.json') `
+                    -RequestId ([string]$script:request.requestId)
+            } | Should -Not -Throw
+
+            Should -Invoke Get-RepoFlowRunRecord -Times 0
+            Should -Invoke Set-RepoFlowRunCheckpoint -Times 0
+            Should -Invoke Complete-RepoFlowRunRecord -Times 0
+        }
+
         It 'publishes one matching result and the existing transport consumes it' {
             $script:publishedComment = $null
             $resultJson = New-TestLocalReviewResult | ConvertTo-Json -Depth 20

@@ -101,6 +101,16 @@ function Complete-RepoFlowLocalReviewBridgeIfPresent {
         [string]$RequestId
     )
 
+    $stateDirectory = Split-Path -Parent $ConfigPath
+    if ([string]::IsNullOrWhiteSpace($stateDirectory)) {
+        return
+    }
+
+    $statePath = Join-Path $stateDirectory '.repo-flow.state.json'
+    if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
+        return
+    }
+
     $runId = Get-RepoFlowLocalReviewBridgeRunId -RequestId $RequestId
     $record = Get-RepoFlowRunRecord -ConfigPath $ConfigPath -RunId $runId
 
