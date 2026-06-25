@@ -1,13 +1,13 @@
 BeforeDiscovery {
     $modulePath = Join-Path $PSScriptRoot '../scripts/RepoFlow/RepoFlow.psd1'
-    $env:REPO_FLOW_REVIEW_FIXTURE_DIRECTORY = Join-Path $PSScriptRoot 'fixtures/review'
+    $env:REPO_FLOW_REVIEW_BRIDGE_FIXTURE_DIRECTORY = Join-Path $PSScriptRoot 'fixtures/review'
     Import-Module $modulePath -Force
 }
 
 Describe 'RepoFlow local automated review bridge' {
     InModuleScope RepoFlow {
         BeforeAll {
-            $script:fixtureDirectory = $env:REPO_FLOW_REVIEW_FIXTURE_DIRECTORY
+            $script:fixtureDirectory = $env:REPO_FLOW_REVIEW_BRIDGE_FIXTURE_DIRECTORY
 
             function New-TestLocalReviewResult {
                 param(
@@ -423,6 +423,6 @@ Describe 'RepoFlow local automated review bridge' {
     }
 
     AfterAll {
-        Remove-Item Env:REPO_FLOW_REVIEW_FIXTURE_DIRECTORY -ErrorAction SilentlyContinue
+        Remove-Item Env:REPO_FLOW_REVIEW_BRIDGE_FIXTURE_DIRECTORY -ErrorAction SilentlyContinue
     }
 }
