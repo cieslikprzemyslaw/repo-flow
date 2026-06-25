@@ -141,12 +141,33 @@ function Invoke-RepoFlowLocalReviewBridge {
                 -Repository $repository `
                 -Body $body
             Write-Host "[REVIEWER] Published result comment #$($comment.id)."
+
+            $resolution = Resolve-RepoFlowAutomatedReviewResultComment `
+                -Request $Request `
+                -Comments @($comment) `
+                -CurrentHeadSha ([string]$livePullRequest.headRefOid) `
+                -Config $Context.Config `
+                -ProcessedRequestIds @()
+
+            if ($resolution.Status -ne 'accepted') {
+                throw (
+                    'The published local review result could not be consumed: ' +
+                    "$($resolution.Status)."
+                )
+            }
         }
         elseif ($existingResolution.Status -eq 'accepted') {
-            Write-Host "[REVIEWER] Reusing result comment #$($existingResolution.Comment.id)."
+            Write-Host (
+                "[REVIEWER] Reusing result comment " +
+                "#$($existingResolution.Comment.id)."
+            )
+            $resolution = $existingResolution
         }
         else {
-            throw "Existing review-result resolution is '$($existingResolution.Status)'."
+            throw (
+                "Existing review-result resolution is " +
+                "'$($existingResolution.Status)'."
+            )
         }
 
         Set-RepoFlowRunCheckpoint `
@@ -159,7 +180,7 @@ function Invoke-RepoFlowLocalReviewBridge {
             -RunId $runId `
             -Outcome completed
 
-        return $result
+        return $resolution
     }
     catch {
         if (-not [string]::IsNullOrWhiteSpace($runId)) {

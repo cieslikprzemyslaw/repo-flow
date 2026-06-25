@@ -241,7 +241,7 @@ Describe 'RepoFlow local automated review bridge' {
             Should -Invoke Complete-RepoFlowRunRecord -Times 0
         }
 
-        It 'publishes one matching result and the existing transport consumes it' {
+        It 'publishes one matching result and returns an accepted transport resolution' {
             $script:publishedComment = $null
             $resultJson = New-TestLocalReviewResult | ConvertTo-Json -Depth 20
 
@@ -282,21 +282,15 @@ Describe 'RepoFlow local automated review bridge' {
                 return $script:publishedComment
             }
 
-            Invoke-RepoFlowLocalReviewBridge `
+            $resolution = Invoke-RepoFlowLocalReviewBridge `
                 -Request $script:request `
                 -Issue $script:issue `
                 -PullRequest $script:pullRequest `
                 -Context $script:context `
-                -StateConfigPath 'C:\repo\.repo-flow.json' |
-                Out-Null
-
-            $resolution = Wait-RepoFlowAutomatedReviewResult `
-                -Request $script:request `
-                -Repository ([string]$script:request.repository) `
-                -Config $script:config `
-                -MaximumPolls 1
+                -StateConfigPath 'C:\repo\.repo-flow.json'
 
             $resolution.Status | Should -Be accepted
+            $resolution.Comment.id | Should -Be 501
             $resolution.Result.verdict | Should -Be pass
             Should -Invoke Invoke-RepoFlowLocalReviewerAgent -Times 1
             Should -Invoke New-RepoFlowPullRequestComment -Times 1
