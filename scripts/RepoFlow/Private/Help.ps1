@@ -77,7 +77,7 @@ Commands:
       Run a bounded automated review and repair loop without merging.
 
   review run
-      Publish or reuse an automated-review request and wait for a trusted result.
+      Publish or reuse a request, run the configured bridge, and consume a trusted result.
 
   branch cleanup
       Find or delete safely merged local branches.
@@ -460,7 +460,8 @@ Apply:
   rf pr review -Number 24 -Apply
 
 The command requires the PR branch and exact head to be checked out locally.
-It waits for configured CI, publishes an exact-head review request, accepts
+It waits for configured CI, publishes an exact-head review request, runs the
+configured local read-only reviewer or waits for an external bridge, accepts
 only a matching trusted result, and records pass, manual-review, or repair
 outcomes in run state.
 
@@ -487,7 +488,8 @@ RepoFlow automated-review commands
 review run
 
 Publishes one idempotent automated-review request for the exact current PR
-head, then waits for a matching trusted review-result comment.
+head. Local mode runs the configured read-only reviewer and publishes the
+matching result; external mode waits for a trusted review-result comment.
 
 Plan:
   rf review run -Number 24
@@ -495,9 +497,10 @@ Plan:
 Publish and wait:
   rf review run -Number 24 -Apply
 
-The command never starts a coding agent, approves a pull request, marks it
-ready, or merges it. A timeout, malformed trusted result, or changed PR head
-pauses the persisted run safely.
+The local reviewer is isolated from the implementation agent and cannot edit
+files. It never starts a coding agent. The command never approves a pull request,
+marks it ready, or merges it. A reviewer failure, timeout, malformed result, or
+changed PR head pauses the persisted run safely.
 '@
         }
 

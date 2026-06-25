@@ -261,14 +261,17 @@ CI polling emits concise check transitions, for example `Validate: pending -> pa
 
 ## Automated review contract
 
-The versioned request/result format used by future automated review workflows is documented in [`AUTOMATED-REVIEW-CONTRACT.md`](AUTOMATED-REVIEW-CONTRACT.md). The current task defines schemas, markers, parsing, matching, replay checks, limits, and truncation rules only; it does not publish or poll GitHub comments.
+The versioned request/result format used by automated review workflows is documented in [`AUTOMATED-REVIEW-CONTRACT.md`](AUTOMATED-REVIEW-CONTRACT.md). The contract defines schemas, markers, parsing, matching, replay checks, limits, and truncation rules used by both local and external review bridges.
 
 ## Automated review transport
 
 Use `rf review run -Number <pr> -Apply` to publish or reuse a request for the
-exact current PR head and wait for a matching trusted result. Configuration,
-trust rules, timeout behaviour, and the external bridge responsibilities are
-documented in [`AUTOMATED-REVIEW-BRIDGE.md`](AUTOMATED-REVIEW-BRIDGE.md).
+exact current PR head. In local mode RepoFlow runs a separately configured
+read-only reviewer, validates its v1 result, publishes the result comment, and
+consumes it through the existing trust boundary. External mode keeps the
+webhook/service workflow. Configuration, trust rules, timeout behaviour, and
+recovery are documented in
+[`AUTOMATED-REVIEW-BRIDGE.md`](AUTOMATED-REVIEW-BRIDGE.md).
 
 ## Bounded PR review loop
 
@@ -277,11 +280,12 @@ review/repair workflow:
 
 1. validate the open PR, checked-out branch, exact head, clean tree, and CI;
 2. publish or reuse a request for that exact head;
-3. consume only the matching trusted result;
-4. record `pass`, or pause on `manual_review`;
-5. for `changes_required`, pass only blockers to the configured coding agent
+3. run the local read-only reviewer or wait for the configured external bridge;
+4. consume only the matching trusted result;
+5. record `pass`, or pause on `manual_review`;
+6. for `changes_required`, pass only blockers to the configured coding agent
    as untrusted task data;
-6. run local validation, commit, push, wait for the new head, observe CI, and
+7. run local validation, commit, push, wait for the new head, observe CI, and
    request a fresh exact-head review.
 
 The original issue remains authoritative. Warnings do not expand repair scope.

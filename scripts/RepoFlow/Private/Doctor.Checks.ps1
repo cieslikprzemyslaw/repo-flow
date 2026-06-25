@@ -313,6 +313,39 @@ function Add-RepoFlowDoctorToolChecks {
                     -Details $_.Exception.Message
             }
         }
+
+        $reviewer = Get-RepoFlowProperty -Object $config -Name 'reviewer' -Default $null
+        if ($null -ne $reviewer -and [string]$reviewer.mode -eq 'local') {
+            $reviewerProvider = [string]$reviewer.provider
+            $reviewerCommand = [string]$reviewer.command
+            $reviewerModel = [string]$reviewer.model
+
+            if (-not (Test-RepoFlowDoctorCommandAvailable -Name $reviewerCommand)) {
+                Add-RepoFlowDoctorResult -Results $Results -Status FAIL `
+                    -Group Reviewer -Check 'Local command and model' `
+                    -Details "$reviewerProvider command '$reviewerCommand' was not found; configured model is '$reviewerModel'."
+            }
+            else {
+                try {
+                    $reviewerVersion = Get-RepoFlowDoctorAgentVersion `
+                        -Provider $reviewerProvider `
+                        -Command $reviewerCommand
+                    Add-RepoFlowDoctorResult -Results $Results -Status PASS `
+                        -Group Reviewer -Check 'Local command and model' `
+                        -Details "$reviewerProvider $($reviewerVersion.Version), model '$reviewerModel', read-only mode."
+                }
+                catch {
+                    Add-RepoFlowDoctorResult -Results $Results -Status FAIL `
+                        -Group Reviewer -Check 'Local command and model' `
+                        -Details $_.Exception.Message
+                }
+            }
+        }
+        elseif ($null -ne $reviewer) {
+            Add-RepoFlowDoctorResult -Results $Results -Status PASS `
+                -Group Reviewer -Check 'Bridge mode' `
+                -Details 'External result-comment bridge mode is configured.'
+        }
     }
 
     return [pscustomobject]@{

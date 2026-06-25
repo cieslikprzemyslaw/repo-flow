@@ -222,14 +222,17 @@ function New-RepoFlowCodexArguments {
 
         [Parameter(Mandatory)]
         [ValidateSet('minimal', 'low', 'medium', 'high', 'xhigh')]
-        [string]$ReasoningEffort
+        [string]$ReasoningEffort,
+
+        [ValidateSet('read-only', 'workspace-write', 'danger-full-access')]
+        [string]$SandboxMode = 'workspace-write'
     )
 
     return @(
         '-a',
         'never',
         '-s',
-        'workspace-write',
+        $SandboxMode,
         '-C',
         $RepositoryRoot,
         '-c',
@@ -267,7 +270,10 @@ function New-RepoFlowClaudeArguments {
 
         [Parameter(Mandatory)]
         [ValidateSet('minimal', 'low', 'medium', 'high', 'xhigh')]
-        [string]$ReasoningEffort
+        [string]$ReasoningEffort,
+
+        [ValidateSet('default', 'acceptEdits', 'bypassPermissions', 'plan', 'dontAsk')]
+        [string]$PermissionMode = 'acceptEdits'
     )
 
     return @(
@@ -276,7 +282,7 @@ function New-RepoFlowClaudeArguments {
         'stream-json',
         '--verbose',
         '--permission-mode',
-        'acceptEdits',
+        $PermissionMode,
         '--model',
         $Model,
         '--effort',
@@ -593,6 +599,12 @@ function Invoke-RepoFlowCodexWithHeartbeat {
         [AllowEmptyString()]
         [string]$Phase = 'agent-running',
 
+        [ValidateSet('read-only', 'workspace-write', 'danger-full-access')]
+        [string]$SandboxMode = 'workspace-write',
+
+        [ValidateRange(0, 7200)]
+        [int]$TimeoutSeconds = 0,
+
         [AllowNull()]
         [AllowEmptyString()]
         [string]$StateConfigPath,
@@ -606,7 +618,8 @@ function Invoke-RepoFlowCodexWithHeartbeat {
         -RepositoryRoot $RepositoryRoot `
         -FinalMessagePath $FinalMessagePath `
         -Model $Model `
-        -ReasoningEffort $ReasoningEffort
+        -ReasoningEffort $ReasoningEffort `
+        -SandboxMode $SandboxMode
 
     $run = Invoke-RepoFlowAgentProcessWithHeartbeat `
         -Provider 'codex' `
@@ -617,6 +630,7 @@ function Invoke-RepoFlowCodexWithHeartbeat {
         -FinalMessagePath $FinalMessagePath `
         -HeartbeatSeconds $HeartbeatSeconds `
         -NoActivityWarningSeconds $NoActivityWarningSeconds `
+        -TimeoutSeconds $TimeoutSeconds `
         -Phase $Phase `
         -StateConfigPath $StateConfigPath `
         -RunId $RunId
@@ -650,6 +664,7 @@ function Invoke-RepoFlowCodexWithHeartbeat {
         Usage = $usage
         DurationSeconds = $run.DurationSeconds
         ErrorCode = ''
+        TimedOut = [bool](Get-RepoFlowProperty -Object $run -Name 'TimedOut' -Default $false)
     }
 }
 
@@ -685,6 +700,12 @@ function Invoke-RepoFlowClaudeWithHeartbeat {
         [AllowEmptyString()]
         [string]$Phase = 'agent-running',
 
+        [ValidateSet('default', 'acceptEdits', 'bypassPermissions', 'plan', 'dontAsk')]
+        [string]$PermissionMode = 'acceptEdits',
+
+        [ValidateRange(0, 7200)]
+        [int]$TimeoutSeconds = 0,
+
         [AllowNull()]
         [AllowEmptyString()]
         [string]$StateConfigPath,
@@ -696,7 +717,8 @@ function Invoke-RepoFlowClaudeWithHeartbeat {
 
     $arguments = New-RepoFlowClaudeArguments `
         -Model $Model `
-        -ReasoningEffort $ReasoningEffort
+        -ReasoningEffort $ReasoningEffort `
+        -PermissionMode $PermissionMode
 
     $run = Invoke-RepoFlowAgentProcessWithHeartbeat `
         -Provider 'claude' `
@@ -707,6 +729,7 @@ function Invoke-RepoFlowClaudeWithHeartbeat {
         -FinalMessagePath $FinalMessagePath `
         -HeartbeatSeconds $HeartbeatSeconds `
         -NoActivityWarningSeconds $NoActivityWarningSeconds `
+        -TimeoutSeconds $TimeoutSeconds `
         -Phase $Phase `
         -StateConfigPath $StateConfigPath `
         -RunId $RunId
@@ -750,6 +773,7 @@ function Invoke-RepoFlowClaudeWithHeartbeat {
         Usage = $result.Usage
         DurationSeconds = $run.DurationSeconds
         ErrorCode = [string]$result.ErrorCode
+        TimedOut = [bool](Get-RepoFlowProperty -Object $run -Name 'TimedOut' -Default $false)
     }
 }
 

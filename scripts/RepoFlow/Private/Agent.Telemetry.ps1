@@ -25,6 +25,9 @@ function Invoke-RepoFlowAgentProcessWithHeartbeat {
         [ValidateRange(30, 7200)]
         [int]$NoActivityWarningSeconds = 180,
 
+        [ValidateRange(0, 7200)]
+        [int]$TimeoutSeconds = 0,
+
         [AllowNull()]
         [AllowEmptyString()]
         [string]$Phase = 'agent-running',
@@ -43,6 +46,7 @@ function Invoke-RepoFlowAgentProcessWithHeartbeat {
     $stderrPath = [System.IO.Path]::GetTempFileName()
     $exitCodePath = [System.IO.Path]::GetTempFileName()
     $job = $null
+    $timedOut = $false
 
     try {
         Set-Content -LiteralPath $promptPath -Value $Prompt -Encoding utf8
@@ -139,6 +143,15 @@ function Invoke-RepoFlowAgentProcessWithHeartbeat {
                     'The process has not been terminated.'
                 )
             }
+
+            if (
+                $TimeoutSeconds -gt 0 -and
+                ((Get-Date) - $startedAt).TotalSeconds -ge $TimeoutSeconds
+            ) {
+                $timedOut = $true
+                Stop-Job -Job $job -ErrorAction SilentlyContinue
+                break
+            }
         }
 
         Receive-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
@@ -176,6 +189,7 @@ function Invoke-RepoFlowAgentProcessWithHeartbeat {
             StandardOutput = $stdout
             StandardError = $stderr
             DurationSeconds = [int][Math]::Round($duration.TotalSeconds)
+            TimedOut = $timedOut
         }
     }
     finally {

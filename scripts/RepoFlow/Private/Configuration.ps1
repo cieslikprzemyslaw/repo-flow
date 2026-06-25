@@ -236,6 +236,7 @@ function Read-RepoFlowConfiguration {
         'issues',
         'git',
         'agent',
+        'reviewer',
         'pullRequest',
         'messages',
         'ci',
@@ -245,6 +246,7 @@ function Read-RepoFlowConfiguration {
     $issues = Get-RepoFlowProperty -Object $raw -Name 'issues' -Default $null
     $git = Get-RepoFlowProperty -Object $raw -Name 'git' -Default $null
     $agent = Get-RepoFlowProperty -Object $raw -Name 'agent' -Default $null
+    $reviewer = Get-RepoFlowProperty -Object $raw -Name 'reviewer' -Default $null
     $pullRequest = Get-RepoFlowProperty -Object $raw -Name 'pullRequest' -Default $null
     $messages = Get-RepoFlowProperty -Object $raw -Name 'messages' -Default $null
     $ci = Get-RepoFlowProperty -Object $raw -Name 'ci' -Default $null
@@ -269,6 +271,16 @@ function Read-RepoFlowConfiguration {
         'ciFixReasoningEffort',
         'preCommitFixReasoningEffort',
         'runProjectChecks'
+    )
+    Assert-RepoFlowAllowedProperties -Object $reviewer -Path '$.reviewer' -Allowed @(
+        'mode',
+        'provider',
+        'command',
+        'model',
+        'reasoningEffort',
+        'heartbeatSeconds',
+        'noActivityWarningSeconds',
+        'timeoutSeconds'
     )
     Assert-RepoFlowAllowedProperties -Object $pullRequest -Path '$.pullRequest' -Allowed @(
         'createDraft',
@@ -315,6 +327,15 @@ function Read-RepoFlowConfiguration {
     $preCommitFixReasoningEffort = Get-RepoFlowProperty -Object $agent -Name 'preCommitFixReasoningEffort' -Default 'low'
     $runProjectChecks = Get-RepoFlowProperty -Object $agent -Name 'runProjectChecks' -Default $false
 
+    $reviewerMode = Get-RepoFlowProperty -Object $reviewer -Name 'mode' -Default 'local'
+    $reviewerProvider = Get-RepoFlowProperty -Object $reviewer -Name 'provider' -Default 'codex'
+    $reviewerCommand = Get-RepoFlowProperty -Object $reviewer -Name 'command' -Default 'codex'
+    $reviewerModel = Get-RepoFlowProperty -Object $reviewer -Name 'model' -Default 'gpt-5.5'
+    $reviewerReasoningEffort = Get-RepoFlowProperty -Object $reviewer -Name 'reasoningEffort' -Default 'high'
+    $reviewerHeartbeatSeconds = Get-RepoFlowProperty -Object $reviewer -Name 'heartbeatSeconds' -Default 15
+    $reviewerNoActivityWarningSeconds = Get-RepoFlowProperty -Object $reviewer -Name 'noActivityWarningSeconds' -Default 180
+    $reviewerTimeoutSeconds = Get-RepoFlowProperty -Object $reviewer -Name 'timeoutSeconds' -Default 900
+
     $createDraft = Get-RepoFlowProperty -Object $pullRequest -Name 'createDraft' -Default $true
     $templatePath = Get-RepoFlowProperty -Object $pullRequest -Name 'templatePath' -Default './.github/pull_request_template.md'
     $mergeMethod = Get-RepoFlowProperty -Object $pullRequest -Name 'mergeMethod' -Default 'squash'
@@ -354,6 +375,15 @@ function Read-RepoFlowConfiguration {
     Assert-RepoFlowString -Value $ciFixReasoningEffort -Path '$.agent.ciFixReasoningEffort'
     Assert-RepoFlowString -Value $preCommitFixReasoningEffort -Path '$.agent.preCommitFixReasoningEffort'
     Assert-RepoFlowBoolean -Value $runProjectChecks -Path '$.agent.runProjectChecks'
+
+    Assert-RepoFlowString -Value $reviewerMode -Path '$.reviewer.mode'
+    Assert-RepoFlowString -Value $reviewerProvider -Path '$.reviewer.provider'
+    Assert-RepoFlowString -Value $reviewerCommand -Path '$.reviewer.command'
+    Assert-RepoFlowString -Value $reviewerModel -Path '$.reviewer.model'
+    Assert-RepoFlowString -Value $reviewerReasoningEffort -Path '$.reviewer.reasoningEffort'
+    Assert-RepoFlowIntegerRange -Value $reviewerHeartbeatSeconds -Minimum 5 -Maximum 300 -Path '$.reviewer.heartbeatSeconds'
+    Assert-RepoFlowIntegerRange -Value $reviewerNoActivityWarningSeconds -Minimum 30 -Maximum 7200 -Path '$.reviewer.noActivityWarningSeconds'
+    Assert-RepoFlowIntegerRange -Value $reviewerTimeoutSeconds -Minimum 30 -Maximum 7200 -Path '$.reviewer.timeoutSeconds'
 
     Assert-RepoFlowBoolean -Value $createDraft -Path '$.pullRequest.createDraft'
     Assert-RepoFlowString -Value $templatePath -Path '$.pullRequest.templatePath'
@@ -430,6 +460,16 @@ function Read-RepoFlowConfiguration {
             ciFixReasoningEffort = [string]$ciFixReasoningEffort
             preCommitFixReasoningEffort = [string]$preCommitFixReasoningEffort
             runProjectChecks = [bool]$runProjectChecks
+        }
+        reviewer = [pscustomobject]@{
+            mode = [string]$reviewerMode
+            provider = [string]$reviewerProvider
+            command = [string]$reviewerCommand
+            model = [string]$reviewerModel
+            reasoningEffort = [string]$reviewerReasoningEffort
+            heartbeatSeconds = [int]$reviewerHeartbeatSeconds
+            noActivityWarningSeconds = [int]$reviewerNoActivityWarningSeconds
+            timeoutSeconds = [int]$reviewerTimeoutSeconds
         }
         pullRequest = [pscustomobject]@{
             createDraft = [bool]$createDraft
@@ -523,6 +563,24 @@ function Assert-RepoFlowConfiguration {
     }
 
     Assert-RepoFlowBoolean -Value $Config.agent.runProjectChecks -Path '$.agent.runProjectChecks'
+
+    $reviewerConfig = Get-RepoFlowProperty -Object $Config -Name 'reviewer' -Default $null
+    if ($null -ne $reviewerConfig) {
+        if ([string]$reviewerConfig.mode -notin @('local', 'external')) {
+            throw "Configuration value '$.reviewer.mode' must be local or external."
+        }
+        if ([string]$reviewerConfig.provider -notin @('codex', 'claude')) {
+            throw "Configuration value '$.reviewer.provider' must be codex or claude."
+        }
+        Assert-RepoFlowString -Value $reviewerConfig.command -Path '$.reviewer.command'
+        Assert-RepoFlowString -Value $reviewerConfig.model -Path '$.reviewer.model'
+        if ([string]$reviewerConfig.reasoningEffort -notin @('minimal', 'low', 'medium', 'high', 'xhigh')) {
+            throw "Configuration value '$.reviewer.reasoningEffort' must be minimal, low, medium, high, or xhigh."
+        }
+        Assert-RepoFlowIntegerRange -Value $reviewerConfig.heartbeatSeconds -Minimum 5 -Maximum 300 -Path '$.reviewer.heartbeatSeconds'
+        Assert-RepoFlowIntegerRange -Value $reviewerConfig.noActivityWarningSeconds -Minimum 30 -Maximum 7200 -Path '$.reviewer.noActivityWarningSeconds'
+        Assert-RepoFlowIntegerRange -Value $reviewerConfig.timeoutSeconds -Minimum 30 -Maximum 7200 -Path '$.reviewer.timeoutSeconds'
+    }
 
     Assert-RepoFlowBoolean -Value $Config.pullRequest.createDraft -Path '$.pullRequest.createDraft'
     Assert-RepoFlowString -Value $Config.pullRequest.templatePath -Path '$.pullRequest.templatePath'
@@ -624,6 +682,7 @@ function Show-RepoFlowConfiguration {
         issues = $Config.issues
         git = $Config.git
         agent = $Config.agent
+        reviewer = $Config.reviewer
         pullRequest = $Config.pullRequest
         messages = $Config.messages
         ci = $Config.ci

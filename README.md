@@ -190,6 +190,16 @@ A minimal workflow configuration looks like this:
     "preCommitFixReasoningEffort": "low",
     "runProjectChecks": false
   },
+  "reviewer": {
+    "mode": "local",
+    "provider": "codex",
+    "command": "codex",
+    "model": "gpt-5.5",
+    "reasoningEffort": "high",
+    "heartbeatSeconds": 15,
+    "noActivityWarningSeconds": 180,
+    "timeoutSeconds": 900
+  },
   "pullRequest": {
     "createDraft": true,
     "templatePath": "./.github/pull_request_template.md",
@@ -575,7 +585,8 @@ rf review run -Number 24 -Apply
 ```
 
 The command publishes or reuses one machine-readable request for the exact PR
-head and waits for a matching trusted result. It never starts an agent or
+head. In local mode it starts a separate read-only reviewer and publishes the
+validated result; in external mode it waits for a trusted result. It never
 merges the PR. See
 [`docs/AUTOMATED-REVIEW-BRIDGE.md`](docs/AUTOMATED-REVIEW-BRIDGE.md).
 
