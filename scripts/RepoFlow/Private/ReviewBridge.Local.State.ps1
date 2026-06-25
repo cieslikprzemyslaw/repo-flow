@@ -101,13 +101,21 @@ function Complete-RepoFlowLocalReviewBridgeIfPresent {
         [string]$RequestId
     )
 
-    $stateDirectory = Split-Path -Parent $ConfigPath
-    if ([string]::IsNullOrWhiteSpace($stateDirectory)) {
+    try {
+        $statePath = Get-RepoFlowStatePath -ConfigPath $ConfigPath
+    }
+    catch {
         return
     }
 
-    $statePath = Join-Path $stateDirectory '.repo-flow.state.json'
-    if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
+    try {
+        $stateExists = Test-Path -LiteralPath $statePath -PathType Leaf
+    }
+    catch {
+        $stateExists = $false
+    }
+
+    if (-not $stateExists) {
         return
     }
 
