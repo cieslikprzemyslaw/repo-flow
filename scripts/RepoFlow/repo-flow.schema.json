@@ -382,8 +382,79 @@
             ]
           }
         },
-        "maxReviewCycles": { "type": "integer", "minimum": 1, "maximum": 10 },
-        "maxRepairCycles": { "type": "integer", "minimum": 0, "maximum": 10 }
+        "maxReviewCycles": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "maxRepairCycles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        }
+      }
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "provider",
+        "command",
+        "model",
+        "reasoningEffort",
+        "heartbeatSeconds",
+        "noActivityWarningSeconds",
+        "timeoutSeconds"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "local",
+            "external"
+          ]
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "codex",
+            "claude"
+          ]
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "enum": [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ]
+        },
+        "heartbeatSeconds": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 300
+        },
+        "noActivityWarningSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 7200
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 7200
+        }
       }
     }
   }

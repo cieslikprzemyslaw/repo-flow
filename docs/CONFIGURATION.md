@@ -479,3 +479,37 @@ Do not store any of the following in `.repo-flow.json`:
 - secrets of any kind.
 
 The configuration file should describe behaviour, not contain credentials or executable instructions.
+
+## Local automated reviewer
+
+`reviewer` configures the process that consumes RepoFlow review requests. It is
+separate from `agent`, which implements issues and repairs code.
+
+```json
+{
+  "reviewer": {
+    "mode": "local",
+    "provider": "codex",
+    "command": "codex",
+    "model": "gpt-5.5",
+    "reasoningEffort": "high",
+    "heartbeatSeconds": 15,
+    "noActivityWarningSeconds": 180,
+    "timeoutSeconds": 900
+  }
+}
+```
+
+- `mode`: `local` runs an isolated read-only reviewer; `external` waits for a
+  webhook/service result comment.
+- `provider`: `codex` or `claude`.
+- `command`: local executable name or path.
+- `model`: reviewer model, independent of the implementation model.
+- `reasoningEffort`: `minimal`, `low`, `medium`, `high`, or `xhigh`.
+- `heartbeatSeconds`: reviewer process heartbeat interval.
+- `noActivityWarningSeconds`: warning threshold without terminating the run.
+- `timeoutSeconds`: hard reviewer-process timeout.
+
+Defaults are local Codex, `gpt-5.5`, high reasoning, 15-second heartbeats,
+180-second idle warnings, and a 900-second timeout. There is deliberately no
+reviewer minimum-CLI-version pin.

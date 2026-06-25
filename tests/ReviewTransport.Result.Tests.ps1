@@ -1,24 +1,22 @@
 BeforeDiscovery {
     $modulePath = Join-Path $PSScriptRoot '../scripts/RepoFlow/RepoFlow.psd1'
+    $global:RepoFlowReviewResultFixtureDirectory = Join-Path $PSScriptRoot 'fixtures/review'
     Import-Module $modulePath -Force
 }
 
 Describe 'RepoFlow automated review result transport' {
-    BeforeAll {
-        $env:REPO_FLOW_REVIEW_FIXTURE_DIRECTORY = Join-Path $PSScriptRoot 'fixtures/review'
-    }
 
     AfterAll {
-        Remove-Item Env:REPO_FLOW_REVIEW_FIXTURE_DIRECTORY -ErrorAction SilentlyContinue
+        Remove-Variable -Name RepoFlowReviewResultFixtureDirectory -Scope Global -ErrorAction SilentlyContinue
     }
 
     InModuleScope RepoFlow {
         BeforeEach {
             $script:request = Get-Content -LiteralPath (
-                Join-Path $env:REPO_FLOW_REVIEW_FIXTURE_DIRECTORY 'valid-request.json'
+                Join-Path $global:RepoFlowReviewResultFixtureDirectory 'valid-request.json'
             ) -Raw | ConvertFrom-Json -Depth 30
             $script:result = Get-Content -LiteralPath (
-                Join-Path $env:REPO_FLOW_REVIEW_FIXTURE_DIRECTORY 'valid-pass-result.json'
+                Join-Path $global:RepoFlowReviewResultFixtureDirectory 'valid-pass-result.json'
             ) -Raw | ConvertFrom-Json -Depth 30
             $script:config = [pscustomobject]@{
                 ci = [pscustomobject]@{
@@ -75,6 +73,33 @@ Describe 'RepoFlow automated review result transport' {
             $resolved.Comment.id | Should -Be 12
         }
 
+        It 'accepts GitHub comment timestamps materialized as DateTime values' {
+            $body = ConvertTo-RepoFlowReviewComment `
+                -Envelope $script:result
+            $createdAt = [datetime]::SpecifyKind(
+                [datetime]'2026-06-24T09:36:20',
+                [System.DateTimeKind]::Utc
+            )
+            $comment = [pscustomobject]@{
+                id = 13
+                created_at = $createdAt
+                body = $body
+                author_association = 'OWNER'
+                user = [pscustomobject]@{
+                    login = 'repository-owner'
+                    type = 'User'
+                }
+            }
+
+            $resolved = Resolve-RepoFlowAutomatedReviewResultComment `
+                -Request $script:request `
+                -Comments @($comment) `
+                -CurrentHeadSha ([string]$script:request.headSha) `
+                -Config $script:config
+
+            $resolved.Status | Should -Be 'accepted'
+            $resolved.Comment.id | Should -Be 13
+        }
         It 'ignores stale results for an earlier head' {
             $stale = $script:result.PSObject.Copy()
             $stale.reviewedHeadSha = '3333333333333333333333333333333333333333'

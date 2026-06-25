@@ -182,11 +182,13 @@ function Format-RepoFlowAgentHeartbeat {
     }
 
     if ($Process.Detected) {
+        $cpuDeltaText = ([double]$Process.CpuDeltaSeconds).ToString(
+            'N2',
+            [System.Globalization.CultureInfo]::InvariantCulture
+        )
+
         $parts.Add(
-            'process={0}#{1} cpu+{2:N2}s' -f
-            $Process.Name,
-            $Process.Id,
-            $Process.CpuDeltaSeconds
+            "process=$([string]$Process.Name)#$([int]$Process.Id) cpu+$($cpuDeltaText)s"
         )
     }
 

@@ -276,14 +276,40 @@ function Invoke-RepoFlowAutomatedReviewWorkflow {
             -RequestCommentId ([long]$requestComment.id)
     }
 
+    $reviewerConfig = Get-RepoFlowProperty `
+        -Object $config `
+        -Name 'reviewer' `
+        -Default ([pscustomobject]@{ mode = 'external' })
+
+    $bridgeResolution = $null
+
+    if ([string]$reviewerConfig.mode -eq 'local') {
+        Write-Host '[REVIEW] Starting local automated review bridge.'
+        $bridgeResolution = Invoke-RepoFlowLocalReviewBridge `
+            -Request $request `
+            -Issue $issue `
+            -PullRequest $pullRequest `
+            -Context $context `
+            -StateConfigPath $stateConfigPath
+    }
+    else {
+        Write-Host '[REVIEW] External bridge mode; waiting for a trusted result comment.'
+    }
+
     $processedRequestIds = Get-RepoFlowProcessedAutomatedReviewRequestIds `
         -ConfigPath $stateConfigPath `
         -ExcludeRequestId ([string]$request.requestId)
-    $resolution = Wait-RepoFlowAutomatedReviewResult `
-        -Request $request `
-        -Repository $repository `
-        -Config $config `
-        -ProcessedRequestIds $processedRequestIds
+
+    $resolution = if ($null -ne $bridgeResolution) {
+        $bridgeResolution
+    }
+    else {
+        Wait-RepoFlowAutomatedReviewResult `
+            -Request $request `
+            -Repository $repository `
+            -Config $config `
+            -ProcessedRequestIds $processedRequestIds
+    }
 
     switch ([string]$resolution.Status) {
         'accepted' {

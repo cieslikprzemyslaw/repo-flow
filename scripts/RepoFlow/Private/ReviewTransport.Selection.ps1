@@ -141,20 +141,17 @@ function Resolve-RepoFlowAutomatedReviewResultComment {
             continue
         }
 
-        $createdAtText = [string](Get-RepoFlowProperty `
+        $createdAtValue = Get-RepoFlowProperty `
             -Object $comment `
             -Name 'created_at' `
-            -Default '')
-        $commentCreatedAt = [DateTimeOffset]::MinValue
+            -Default $null
 
-        $hasValidCreatedAt = [DateTimeOffset]::TryParse(
-            $createdAtText,
-            [System.Globalization.CultureInfo]::InvariantCulture,
-            [System.Globalization.DateTimeStyles]::RoundtripKind,
-            [ref]$commentCreatedAt
-        )
-
-        if (-not $hasValidCreatedAt) {
+        try {
+            $commentCreatedAt = ConvertTo-RepoFlowReviewTimestamp `
+                -Value $createdAtValue `
+                -Path '$.comment.created_at'
+        }
+        catch {
             if ($null -eq $firstMalformed) {
                 $firstMalformed = [pscustomobject]@{
                     Status = 'malformed'

@@ -1,6 +1,6 @@
 @{
     RootModule = 'RepoFlow.psm1'
-    ModuleVersion = '0.3.0'
+    ModuleVersion = '0.4.0'
     GUID = 'e8cb12f5-f8fe-4ed7-bf08-c47939fd652d'
     Author = 'Przemyslaw Cieslik'
     CompanyName = 'Community'

@@ -45,6 +45,16 @@
     "preCommitFixReasoningEffort": "low",
     "runProjectChecks": false
   },
+  "reviewer": {
+    "mode": "local",
+    "provider": "codex",
+    "command": "codex",
+    "model": "gpt-5.5",
+    "reasoningEffort": "high",
+    "heartbeatSeconds": 15,
+    "noActivityWarningSeconds": 180,
+    "timeoutSeconds": 900
+  },
   "pullRequest": {
     "createDraft": true,
     "templatePath": "./.github/pull_request_template.md",
